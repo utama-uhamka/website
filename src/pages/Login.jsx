@@ -15,10 +15,10 @@ const Login = () => {
     e.preventDefault();
 
     // Simple validation (in production, you would validate against backend)
-    if (email && password) {
-      dispatch(login({ name: 'Muzifa', email }));
+    // if (email && password) {
+      dispatch(login({ name: 'Super Admin', email }));
       navigate('/dashboard');
-    }
+    // }
   };
 
   return (
@@ -27,7 +27,7 @@ const Login = () => {
         {/* Header */}
         <div className="bg-primary text-white p-8 text-center">
           <div className="w-20 h-20 bg-white rounded-full mx-auto mb-4 flex items-center justify-center">
-            <span className="text-primary font-bold text-4xl">U</span>
+            <span className="text-primary font-bold text-4xl"><img src='/logo.png' className='w-10'/></span>
           </div>
           <h1 className="text-3xl font-bold mb-2">Welcome Back!</h1>
           <p className="text-purple-200">Sign in to continue to Utama Dashboard</p>

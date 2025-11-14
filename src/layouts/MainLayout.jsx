@@ -10,8 +10,10 @@ const MainLayout = ({ children }) => {
     <div className="min-h-screen bg-gray-50">
       <Sidebar />
       <Header />
-      <main className={`mt-16 min-h-[calc(100vh-4rem)] transition-all duration-300 ${sidebarOpen ? 'ml-64' : 'ml-0'}`}>
-        <div className="p-8">
+      <main className={`mt-16 min-h-[calc(100vh-4rem)] transition-all duration-300 ${
+        sidebarOpen ? 'md:ml-64' : 'ml-0'
+      }`}>
+        <div className="p-4 sm:p-6 md:p-8">
           {children}
         </div>
         <Footer />

@@ -6,11 +6,10 @@ import { checkAuth } from './store/authSlice';
 // Pages
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
-import Billing from './pages/Billing';
-import Ukm from './pages/Ukm';
-import Inventory from './pages/Inventory';
-import Issue from './pages/Issue';
-import Event from './pages/Event';
+import BuildingManagement from './pages/BuildingManagement';
+import BillingPage from './pages/Billing';
+import EmployeePage from './pages/AssetManagement/Employee';
+import AssetPage from './pages/AssetManagement/Assets';
 import Settings from './pages/Settings';
 
 // Components
@@ -36,42 +35,34 @@ function App() {
           }
         />
         <Route
+          path="/building-management/*"
+          element={
+            <ProtectedRoute>
+              <BuildingManagement />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/asset-management"
+          element={
+            <ProtectedRoute>
+              <AssetPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/employee"
+          element={
+            <ProtectedRoute>
+              <EmployeePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/billing"
           element={
             <ProtectedRoute>
-              <Billing />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/ukm"
-          element={
-            <ProtectedRoute>
-              <Ukm />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/inventory"
-          element={
-            <ProtectedRoute>
-              <Inventory />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/issue"
-          element={
-            <ProtectedRoute>
-              <Issue />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/event"
-          element={
-            <ProtectedRoute>
-              <Event />
+              <BillingPage />
             </ProtectedRoute>
           }
         />
