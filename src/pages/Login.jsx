@@ -26,9 +26,6 @@ const Login = () => {
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
         {/* Header */}
         <div className="bg-primary text-white p-8 text-center">
-          <div className="w-20 h-20 bg-white rounded-full mx-auto mb-4 flex items-center justify-center">
-            <span className="text-primary font-bold text-4xl">U</span>
-          </div>
           <h1 className="text-3xl font-bold mb-2">Welcome Back!</h1>
           <p className="text-purple-200">Sign in to continue to Utama Dashboard</p>
         </div>

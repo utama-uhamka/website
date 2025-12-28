@@ -28,21 +28,21 @@ const Header = () => {
 
   const handleLogout = () => {
     Swal.fire({
-      title: 'Logout',
-      text: 'Are you sure you want to logout?',
+      title: 'Keluar',
+      text: 'Apakah Anda yakin ingin keluar?',
       icon: 'question',
       showCancelButton: true,
       confirmButtonColor: '#4A22AD',
       cancelButtonColor: '#6b7280',
-      confirmButtonText: 'Yes, logout',
-      cancelButtonText: 'Cancel'
+      confirmButtonText: 'Ya, Keluar',
+      cancelButtonText: 'Batal'
     }).then((result) => {
       if (result.isConfirmed) {
         dispatch(logout());
         navigate('/login');
         Swal.fire({
-          title: 'Logged Out!',
-          text: 'You have been successfully logged out.',
+          title: 'Berhasil Keluar!',
+          text: 'Anda telah berhasil keluar dari sistem.',
           icon: 'success',
           timer: 1500,
           showConfirmButton: false
@@ -104,7 +104,7 @@ const Header = () => {
                 <FiUser size={18} className="text-gray-600" />
                 <div>
                   <div className="text-sm font-medium text-gray-800">Profile</div>
-                  <div className="text-xs text-gray-500">View your profile</div>
+                  <div className="text-xs text-gray-500">Lihat profil Anda</div>
                 </div>
               </button>
 
@@ -117,8 +117,8 @@ const Header = () => {
               >
                 <FiSettings size={18} className="text-gray-600" />
                 <div>
-                  <div className="text-sm font-medium text-gray-800">Settings</div>
-                  <div className="text-xs text-gray-500">Account settings</div>
+                  <div className="text-sm font-medium text-gray-800">Pengaturan</div>
+                  <div className="text-xs text-gray-500">Pengaturan akun</div>
                 </div>
               </button>
 
@@ -130,8 +130,8 @@ const Header = () => {
               >
                 <FiLogOut size={18} className="text-red-600" />
                 <div>
-                  <div className="text-sm font-medium text-red-600">Logout</div>
-                  <div className="text-xs text-red-400">Sign out from account</div>
+                  <div className="text-sm font-medium text-red-600">Keluar</div>
+                  <div className="text-xs text-red-400">Keluar dari akun</div>
                 </div>
               </button>
             </div>
