@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { toast } from 'react-hot-toast';
 import MainLayout from '../layouts/MainLayout';
 import {
   DataTable,
@@ -8,9 +10,22 @@ import {
   ConfirmDialog,
   PageHeader,
 } from '../components/ui';
-import { FiUser, FiCalendar, FiStar } from 'react-icons/fi';
+import { FiUser, FiCalendar, FiLoader } from 'react-icons/fi';
+import {
+  fetchEvaluations,
+  createEvaluation,
+  updateEvaluation,
+  deleteEvaluation,
+  clearDataError,
+  clearDataSuccess,
+} from '../store/dataSlice';
+import { fetchUsers } from '../store/usersSlice';
 
 const Evaluations = () => {
+  const dispatch = useDispatch();
+  const { evaluations, loading, error, success } = useSelector((state) => state.data);
+  const { data: users } = useSelector((state) => state.users);
+
   const [searchValue, setSearchValue] = useState('');
   const [filterValues, setFilterValues] = useState({});
   const [currentPage, setCurrentPage] = useState(1);
@@ -18,6 +33,7 @@ const Evaluations = () => {
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [formLoading, setFormLoading] = useState(false);
   const [formData, setFormData] = useState({
     user_id: '',
     period: '',
@@ -28,29 +44,63 @@ const Evaluations = () => {
     notes: '',
   });
 
-  // Dummy data
-  const users = [
-    { value: '1', label: 'Ahmad Fauzi' },
-    { value: '2', label: 'Budi Santoso' },
-    { value: '3', label: 'Citra Dewi' },
-    { value: '4', label: 'Dani Pratama' },
-  ];
+  const itemsPerPage = 10;
 
   const periods = [
     { value: '2024-Q4', label: 'Q4 2024' },
     { value: '2024-Q3', label: 'Q3 2024' },
     { value: '2024-Q2', label: 'Q2 2024' },
     { value: '2024-Q1', label: 'Q1 2024' },
+    { value: '2025-Q1', label: 'Q1 2025' },
   ];
 
-  const data = [
-    { id: 1, user: 'Ahmad Fauzi', user_id: '1', period: 'Q4 2024', period_value: '2024-Q4', attendance_score: 95, performance_score: 88, attitude_score: 90, teamwork_score: 85, total_score: 89.5, rating: 'A', notes: 'Kinerja sangat baik, perlu tingkatkan teamwork', evaluated_at: '2024-12-20' },
-    { id: 2, user: 'Budi Santoso', user_id: '2', period: 'Q4 2024', period_value: '2024-Q4', attendance_score: 85, performance_score: 82, attitude_score: 88, teamwork_score: 90, total_score: 86.25, rating: 'B', notes: 'Perlu tingkatkan kehadiran', evaluated_at: '2024-12-20' },
-    { id: 3, user: 'Citra Dewi', user_id: '3', period: 'Q4 2024', period_value: '2024-Q4', attendance_score: 92, performance_score: 90, attitude_score: 95, teamwork_score: 92, total_score: 92.25, rating: 'A', notes: 'Excellent performance', evaluated_at: '2024-12-21' },
-    { id: 4, user: 'Dani Pratama', user_id: '4', period: 'Q4 2024', period_value: '2024-Q4', attendance_score: 78, performance_score: 75, attitude_score: 80, teamwork_score: 82, total_score: 78.75, rating: 'C', notes: 'Perlu perbaikan signifikan', evaluated_at: '2024-12-21' },
-    { id: 5, user: 'Ahmad Fauzi', user_id: '1', period: 'Q3 2024', period_value: '2024-Q3', attendance_score: 90, performance_score: 85, attitude_score: 88, teamwork_score: 82, total_score: 86.25, rating: 'B', notes: 'Menunjukkan peningkatan', evaluated_at: '2024-09-20' },
-    { id: 6, user: 'Budi Santoso', user_id: '2', period: 'Q3 2024', period_value: '2024-Q3', attendance_score: 88, performance_score: 80, attitude_score: 85, teamwork_score: 88, total_score: 85.25, rating: 'B', notes: 'Konsisten', evaluated_at: '2024-09-20' },
-  ];
+  // Load evaluations
+  const loadEvaluations = useCallback(() => {
+    const params = {
+      page: currentPage,
+      limit: itemsPerPage,
+      search: searchValue,
+      ...filterValues,
+    };
+    dispatch(fetchEvaluations(params));
+  }, [dispatch, currentPage, itemsPerPage, searchValue, filterValues]);
+
+  useEffect(() => {
+    loadEvaluations();
+  }, [loadEvaluations]);
+
+  // Load users for filter and form
+  useEffect(() => {
+    dispatch(fetchUsers({ limit: 100 }));
+  }, [dispatch]);
+
+  // Handle errors
+  useEffect(() => {
+    if (error) {
+      toast.error(error);
+      dispatch(clearDataError());
+    }
+  }, [error, dispatch]);
+
+  // Handle success
+  useEffect(() => {
+    if (success) {
+      toast.success(success);
+      dispatch(clearDataSuccess());
+      loadEvaluations();
+    }
+  }, [success, dispatch, loadEvaluations]);
+
+  // Reset page when search/filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchValue, filterValues]);
+
+  // User options
+  const userOptions = users.map((u) => ({
+    value: u.user_id?.toString(),
+    label: u.full_name,
+  }));
 
   const getRatingColor = (rating) => {
     const colors = {
@@ -63,16 +113,28 @@ const Evaluations = () => {
     return colors[rating] || 'bg-gray-100 text-gray-700';
   };
 
+  const calculateRating = (totalScore) => {
+    if (totalScore >= 90) return 'A';
+    if (totalScore >= 80) return 'B';
+    if (totalScore >= 70) return 'C';
+    if (totalScore >= 60) return 'D';
+    return 'E';
+  };
+
   const columns = [
     {
       key: 'user',
       label: 'Karyawan',
-      render: (value) => (
+      render: (value, item) => (
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-            <FiUser size={14} className="text-primary" />
+            {item.user?.photo ? (
+              <img src={item.user.photo} alt={item.user?.full_name} className="w-8 h-8 rounded-full object-cover" />
+            ) : (
+              <FiUser size={14} className="text-primary" />
+            )}
           </div>
-          <span className="font-medium text-gray-800">{value}</span>
+          <span className="font-medium text-gray-800">{item.user?.full_name || '-'}</span>
         </div>
       ),
     },
@@ -85,41 +147,48 @@ const Evaluations = () => {
       key: 'attendance_score',
       label: 'Kehadiran',
       width: '90px',
-      render: (value) => <span className="font-medium">{value}</span>,
+      render: (value) => <span className="font-medium">{value || 0}</span>,
     },
     {
       key: 'performance_score',
       label: 'Kinerja',
       width: '80px',
-      render: (value) => <span className="font-medium">{value}</span>,
+      render: (value) => <span className="font-medium">{value || 0}</span>,
     },
     {
       key: 'attitude_score',
       label: 'Sikap',
       width: '70px',
-      render: (value) => <span className="font-medium">{value}</span>,
+      render: (value) => <span className="font-medium">{value || 0}</span>,
     },
     {
       key: 'teamwork_score',
       label: 'Teamwork',
       width: '90px',
-      render: (value) => <span className="font-medium">{value}</span>,
+      render: (value) => <span className="font-medium">{value || 0}</span>,
     },
     {
       key: 'total_score',
       label: 'Total',
       width: '80px',
-      render: (value) => <span className="font-bold text-primary">{value}</span>,
+      render: (value, item) => {
+        const total = value || ((item.attendance_score + item.performance_score + item.attitude_score + item.teamwork_score) / 4);
+        return <span className="font-bold text-primary">{total?.toFixed(2) || 0}</span>;
+      },
     },
     {
       key: 'rating',
       label: 'Rating',
       width: '80px',
-      render: (value) => (
-        <span className={`px-3 py-1 text-sm font-bold rounded-full ${getRatingColor(value)}`}>
-          {value}
-        </span>
-      ),
+      render: (value, item) => {
+        const total = item.total_score || ((item.attendance_score + item.performance_score + item.attitude_score + item.teamwork_score) / 4);
+        const rating = value || calculateRating(total);
+        return (
+          <span className={`px-3 py-1 text-sm font-bold rounded-full ${getRatingColor(rating)}`}>
+            {rating}
+          </span>
+        );
+      },
     },
   ];
 
@@ -127,7 +196,7 @@ const Evaluations = () => {
     {
       key: 'user_id',
       label: 'Karyawan',
-      options: users,
+      options: userOptions,
     },
     {
       key: 'period',
@@ -157,13 +226,13 @@ const Evaluations = () => {
   const handleEdit = (item) => {
     setSelectedItem(item);
     setFormData({
-      user_id: item.user_id,
-      period: item.period_value,
-      attendance_score: item.attendance_score,
-      performance_score: item.performance_score,
-      attitude_score: item.attitude_score,
-      teamwork_score: item.teamwork_score,
-      notes: item.notes,
+      user_id: item.user_id?.toString() || '',
+      period: item.period || '',
+      attendance_score: item.attendance_score?.toString() || '',
+      performance_score: item.performance_score?.toString() || '',
+      attitude_score: item.attitude_score?.toString() || '',
+      teamwork_score: item.teamwork_score?.toString() || '',
+      notes: item.notes || '',
     });
     setIsModalOpen(true);
   };
@@ -178,28 +247,50 @@ const Evaluations = () => {
     setIsDeleteOpen(true);
   };
 
-  const handleSubmit = () => {
-    console.log('Form submitted:', formData);
-    setIsModalOpen(false);
+  const handleSubmit = async () => {
+    setFormLoading(true);
+    try {
+      const submitData = {
+        user_id: parseInt(formData.user_id),
+        period: formData.period,
+        attendance_score: parseInt(formData.attendance_score) || 0,
+        performance_score: parseInt(formData.performance_score) || 0,
+        attitude_score: parseInt(formData.attitude_score) || 0,
+        teamwork_score: parseInt(formData.teamwork_score) || 0,
+        notes: formData.notes,
+      };
+
+      // Calculate total and rating
+      const total = (submitData.attendance_score + submitData.performance_score + submitData.attitude_score + submitData.teamwork_score) / 4;
+      submitData.total_score = total;
+      submitData.rating = calculateRating(total);
+
+      if (selectedItem) {
+        await dispatch(updateEvaluation({ id: selectedItem.evaluation_id, data: submitData })).unwrap();
+      } else {
+        await dispatch(createEvaluation(submitData)).unwrap();
+      }
+      setIsModalOpen(false);
+    } catch (err) {
+      // Error handled by slice
+    } finally {
+      setFormLoading(false);
+    }
   };
 
-  const handleConfirmDelete = () => {
-    console.log('Deleted:', selectedItem);
-    setIsDeleteOpen(false);
+  const handleConfirmDelete = async () => {
+    try {
+      await dispatch(deleteEvaluation(selectedItem.evaluation_id)).unwrap();
+      setIsDeleteOpen(false);
+    } catch (err) {
+      // Error handled by slice
+    }
   };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
-
-  // Filter data
-  const filteredData = data.filter((item) => {
-    const matchSearch = item.user.toLowerCase().includes(searchValue.toLowerCase());
-    const matchUser = !filterValues.user_id || item.user_id === filterValues.user_id;
-    const matchPeriod = !filterValues.period || item.period_value === filterValues.period;
-    return matchSearch && matchUser && matchPeriod;
-  });
 
   return (
     <MainLayout>
@@ -225,17 +316,25 @@ const Evaluations = () => {
         onExport={() => console.log('Export evaluations')}
       />
 
-      <DataTable
-        columns={columns}
-        data={filteredData}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-        onView={handleView}
-        actionColumn={{ edit: true, delete: true, view: true }}
-        currentPage={currentPage}
-        totalPages={Math.ceil(filteredData.length / 10)}
-        onPageChange={setCurrentPage}
-      />
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <FiLoader className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={evaluations.data}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+          onView={handleView}
+          actionColumn={{ edit: true, delete: true, view: true }}
+          currentPage={evaluations.pagination.page}
+          totalPages={evaluations.pagination.totalPages}
+          totalItems={evaluations.pagination.total}
+          itemsPerPage={itemsPerPage}
+          onPageChange={setCurrentPage}
+        />
+      )}
 
       {/* Add/Edit Modal */}
       <Modal
@@ -243,6 +342,7 @@ const Evaluations = () => {
         onClose={() => setIsModalOpen(false)}
         title={selectedItem ? 'Edit Penilaian' : 'Tambah Penilaian'}
         onSubmit={handleSubmit}
+        loading={formLoading}
         size="lg"
       >
         <div className="grid grid-cols-2 gap-4">
@@ -252,7 +352,7 @@ const Evaluations = () => {
             type="select"
             value={formData.user_id}
             onChange={handleInputChange}
-            options={users}
+            options={userOptions}
             required
           />
           <FormInput
@@ -323,80 +423,94 @@ const Evaluations = () => {
         showFooter={false}
         size="md"
       >
-        {selectedItem && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                  <FiUser size={24} className="text-primary" />
+        {selectedItem && (() => {
+          const totalScore = selectedItem.total_score ||
+            ((selectedItem.attendance_score + selectedItem.performance_score + selectedItem.attitude_score + selectedItem.teamwork_score) / 4);
+          const rating = selectedItem.rating || calculateRating(totalScore);
+
+          return (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                    {selectedItem.user?.photo ? (
+                      <img src={selectedItem.user.photo} alt={selectedItem.user?.full_name} className="w-12 h-12 rounded-full object-cover" />
+                    ) : (
+                      <FiUser size={24} className="text-primary" />
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-800">{selectedItem.user?.full_name || '-'}</h3>
+                    <p className="text-sm text-gray-500">{selectedItem.period}</p>
+                  </div>
                 </div>
+                <div className={`px-4 py-2 text-2xl font-bold rounded-xl ${getRatingColor(rating)}`}>
+                  {rating}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-gray-500">Kehadiran</span>
+                    <span className="text-lg font-bold text-gray-800">{selectedItem.attendance_score || 0}</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div className="bg-primary rounded-full h-2" style={{ width: `${selectedItem.attendance_score || 0}%` }}></div>
+                  </div>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-gray-500">Kinerja</span>
+                    <span className="text-lg font-bold text-gray-800">{selectedItem.performance_score || 0}</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div className="bg-primary rounded-full h-2" style={{ width: `${selectedItem.performance_score || 0}%` }}></div>
+                  </div>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-gray-500">Sikap</span>
+                    <span className="text-lg font-bold text-gray-800">{selectedItem.attitude_score || 0}</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div className="bg-primary rounded-full h-2" style={{ width: `${selectedItem.attitude_score || 0}%` }}></div>
+                  </div>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-gray-500">Teamwork</span>
+                    <span className="text-lg font-bold text-gray-800">{selectedItem.teamwork_score || 0}</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div className="bg-primary rounded-full h-2" style={{ width: `${selectedItem.teamwork_score || 0}%` }}></div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-primary/5 rounded-lg p-4 flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-600">Total Skor</span>
+                <span className="text-2xl font-bold text-primary">{totalScore?.toFixed(2) || 0}</span>
+              </div>
+
+              {selectedItem.notes && (
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-800">{selectedItem.user}</h3>
-                  <p className="text-sm text-gray-500">{selectedItem.period}</p>
+                  <p className="text-xs text-gray-500 mb-1">Catatan</p>
+                  <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">{selectedItem.notes}</p>
                 </div>
-              </div>
-              <div className={`px-4 py-2 text-2xl font-bold rounded-xl ${getRatingColor(selectedItem.rating)}`}>
-                {selectedItem.rating}
+              )}
+
+              <div className="flex items-center gap-2 text-gray-500 text-sm">
+                <FiCalendar size={14} />
+                <span>
+                  Dinilai pada: {selectedItem.createdAt
+                    ? new Date(selectedItem.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+                    : '-'}
+                </span>
               </div>
             </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-500">Kehadiran</span>
-                  <span className="text-lg font-bold text-gray-800">{selectedItem.attendance_score}</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div className="bg-primary rounded-full h-2" style={{ width: `${selectedItem.attendance_score}%` }}></div>
-                </div>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-500">Kinerja</span>
-                  <span className="text-lg font-bold text-gray-800">{selectedItem.performance_score}</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div className="bg-primary rounded-full h-2" style={{ width: `${selectedItem.performance_score}%` }}></div>
-                </div>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-500">Sikap</span>
-                  <span className="text-lg font-bold text-gray-800">{selectedItem.attitude_score}</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div className="bg-primary rounded-full h-2" style={{ width: `${selectedItem.attitude_score}%` }}></div>
-                </div>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-500">Teamwork</span>
-                  <span className="text-lg font-bold text-gray-800">{selectedItem.teamwork_score}</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div className="bg-primary rounded-full h-2" style={{ width: `${selectedItem.teamwork_score}%` }}></div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-primary/5 rounded-lg p-4 flex items-center justify-between">
-              <span className="text-sm font-medium text-gray-600">Total Skor</span>
-              <span className="text-2xl font-bold text-primary">{selectedItem.total_score}</span>
-            </div>
-
-            {selectedItem.notes && (
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Catatan</p>
-                <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">{selectedItem.notes}</p>
-              </div>
-            )}
-
-            <div className="flex items-center gap-2 text-gray-500 text-sm">
-              <FiCalendar size={14} />
-              <span>Dinilai pada: {new Date(selectedItem.evaluated_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
-            </div>
-          </div>
-        )}
+          );
+        })()}
       </Modal>
 
       {/* Delete Confirmation */}
@@ -405,9 +519,10 @@ const Evaluations = () => {
         onClose={() => setIsDeleteOpen(false)}
         onConfirm={handleConfirmDelete}
         title="Hapus Penilaian"
-        message={`Apakah Anda yakin ingin menghapus penilaian untuk "${selectedItem?.user}" periode ${selectedItem?.period}?`}
+        message={`Apakah Anda yakin ingin menghapus penilaian untuk "${selectedItem?.user?.full_name}" periode ${selectedItem?.period}?`}
         confirmText="Ya, Hapus"
         type="danger"
+        loading={loading}
       />
     </MainLayout>
   );

@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { toast } from 'react-hot-toast';
 import MainLayout from '../layouts/MainLayout';
 import {
   DataTable,
@@ -8,9 +10,24 @@ import {
   ConfirmDialog,
   PageHeader,
 } from '../components/ui';
-import { FiCalendar, FiClock, FiMapPin, FiImage, FiUsers } from 'react-icons/fi';
+import { FiCalendar, FiClock, FiMapPin, FiImage, FiUsers, FiLoader } from 'react-icons/fi';
+import {
+  fetchEvents,
+  createEvent,
+  updateEvent,
+  deleteEvent,
+  clearDataError,
+  clearDataSuccess,
+} from '../store/dataSlice';
+import { fetchEventCategories } from '../store/masterSlice';
+import { fetchCampuses } from '../store/campusesSlice';
 
 const Event = () => {
+  const dispatch = useDispatch();
+  const { events } = useSelector((state) => state.data);
+  const { eventCategories } = useSelector((state) => state.master);
+  const { data: campuses } = useSelector((state) => state.campuses);
+
   const [searchValue, setSearchValue] = useState('');
   const [filterValues, setFilterValues] = useState({});
   const [currentPage, setCurrentPage] = useState(1);
@@ -18,58 +35,111 @@ const Event = () => {
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [formLoading, setFormLoading] = useState(false);
   const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    category_id: '',
+    event_name: '',
+    event_description: '',
+    event_category_id: '',
+    campus_id: '',
     location: '',
     date: '',
     start_time: '',
     end_time: '',
     capacity: '',
     organizer: '',
-    status: 'upcoming',
+    event_type: '',
+    is_active: 1,
   });
 
-  // Dummy data
-  const categories = [
-    { value: '1', label: 'Seminar' },
-    { value: '2', label: 'Rapat' },
-    { value: '3', label: 'Wisuda' },
-    { value: '4', label: 'Pelatihan' },
-    { value: '5', label: 'Lomba' },
-    { value: '6', label: 'Kegiatan Mahasiswa' },
+  const itemsPerPage = 10;
+
+  const eventTypes = [
+    { value: 'Seminar', label: 'Seminar' },
+    { value: 'Rapat', label: 'Rapat' },
+    { value: 'Wisuda', label: 'Wisuda' },
+    { value: 'Pelatihan', label: 'Pelatihan' },
+    { value: 'Lomba', label: 'Lomba' },
+    { value: 'Kegiatan Mahasiswa', label: 'Kegiatan Mahasiswa' },
   ];
 
-  const statuses = [
-    { value: 'upcoming', label: 'Akan Datang' },
-    { value: 'ongoing', label: 'Berlangsung' },
-    { value: 'completed', label: 'Selesai' },
-    { value: 'cancelled', label: 'Dibatalkan' },
-  ];
+  // Load events
+  const loadEvents = useCallback(() => {
+    const params = {
+      page: currentPage,
+      limit: itemsPerPage,
+      search: searchValue,
+      ...filterValues,
+    };
+    dispatch(fetchEvents(params));
+  }, [dispatch, currentPage, itemsPerPage, searchValue, filterValues]);
 
-  const data = [
-    { id: 1, title: 'Seminar Nasional Teknologi', description: 'Seminar teknologi informasi terkini', category: 'Seminar', category_id: '1', color: '#4A22AD', location: 'Aula Gedung Rektorat', date: '2025-01-15', start_time: '08:00', end_time: '16:00', capacity: 500, attendees: 420, organizer: 'Fakultas Teknik', image: null, status: 'upcoming' },
-    { id: 2, title: 'Rapat Koordinasi Bulanan', description: 'Rapat koordinasi seluruh pimpinan', category: 'Rapat', category_id: '2', color: '#2563EB', location: 'Ruang Rapat A', date: '2025-01-10', start_time: '09:00', end_time: '12:00', capacity: 30, attendees: 25, organizer: 'Rektorat', image: null, status: 'upcoming' },
-    { id: 3, title: 'Wisuda Periode Januari', description: 'Wisuda mahasiswa periode Januari 2025', category: 'Wisuda', category_id: '3', color: '#059669', location: 'Gedung Convention Center', date: '2025-01-25', start_time: '08:00', end_time: '14:00', capacity: 2000, attendees: 1500, organizer: 'Rektorat', image: null, status: 'upcoming' },
-    { id: 4, title: 'Pelatihan Penggunaan Sistem', description: 'Pelatihan untuk admin sistem baru', category: 'Pelatihan', category_id: '4', color: '#D97706', location: 'Lab Komputer', date: '2025-01-08', start_time: '13:00', end_time: '17:00', capacity: 40, attendees: 35, organizer: 'IT Support', image: null, status: 'upcoming' },
-    { id: 5, title: 'Lomba Debat Bahasa Inggris', description: 'Kompetisi debat antar fakultas', category: 'Lomba', category_id: '5', color: '#7C3AED', location: 'Aula FKIP', date: '2024-12-20', start_time: '08:00', end_time: '17:00', capacity: 200, attendees: 180, organizer: 'HMJ Bahasa Inggris', image: null, status: 'completed' },
-    { id: 6, title: 'Festival Seni Budaya', description: 'Festival tahunan seni dan budaya', category: 'Kegiatan Mahasiswa', category_id: '6', color: '#0891B2', location: 'Lapangan Kampus A', date: '2024-12-15', start_time: '07:00', end_time: '22:00', capacity: 1000, attendees: 850, organizer: 'BEM', image: null, status: 'completed' },
-  ];
+  useEffect(() => {
+    loadEvents();
+  }, [loadEvents]);
+
+  // Load master data
+  useEffect(() => {
+    dispatch(fetchEventCategories({ limit: 100 }));
+    dispatch(fetchCampuses({ limit: 100 }));
+  }, [dispatch]);
+
+  // Handle success/error
+  useEffect(() => {
+    if (events.error) {
+      toast.error(events.error);
+      dispatch(clearDataError());
+    }
+  }, [events.error, dispatch]);
+
+  useEffect(() => {
+    if (events.success) {
+      toast.success(events.success);
+      dispatch(clearDataSuccess());
+      loadEvents();
+    }
+  }, [events.success, dispatch, loadEvents]);
+
+  // Reset page when search/filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchValue, filterValues]);
+
+  // Options for dropdowns
+  const categoryOptions = eventCategories.data.map((c) => ({
+    value: c.event_category_id?.toString(),
+    label: c.event_category_name,
+  }));
+
+  const campusOptions = campuses.map((c) => ({
+    value: c.campus_id?.toString(),
+    label: c.campus_name,
+  }));
+
+  const getEventColor = (type) => {
+    const colors = {
+      Seminar: '#4A22AD',
+      Rapat: '#2563EB',
+      Wisuda: '#059669',
+      Pelatihan: '#D97706',
+      Lomba: '#7C3AED',
+      'Kegiatan Mahasiswa': '#0891B2',
+    };
+    return colors[type] || '#6B7280';
+  };
 
   const columns = [
     {
-      key: 'title',
+      key: 'event_name',
       label: 'Event',
       render: (value, item) => (
         <div className="flex items-center gap-3">
           <div
             className="w-2 h-12 rounded-full"
-            style={{ backgroundColor: item.color }}
+            style={{ backgroundColor: getEventColor(item.event_type) }}
           ></div>
           <div>
             <p className="font-medium text-gray-800">{value}</p>
-            <p className="text-xs text-gray-500">{item.category}</p>
+            <p className="text-xs text-gray-500">{item.event_type || '-'}</p>
           </div>
         </div>
       ),
@@ -82,11 +152,21 @@ const Event = () => {
         <div>
           <div className="flex items-center gap-1.5 text-gray-700">
             <FiCalendar size={14} />
-            <span className="text-sm">{new Date(value).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+            <span className="text-sm">
+              {value
+                ? new Date(value).toLocaleDateString('id-ID', {
+                    day: 'numeric',
+                    month: 'short',
+                    year: 'numeric',
+                  })
+                : '-'}
+            </span>
           </div>
           <div className="flex items-center gap-1.5 text-gray-500 mt-1">
             <FiClock size={14} />
-            <span className="text-xs">{item.start_time} - {item.end_time}</span>
+            <span className="text-xs">
+              {item.start_time || '-'} - {item.end_time || '-'}
+            </span>
           </div>
         </div>
       ),
@@ -95,60 +175,58 @@ const Event = () => {
       key: 'location',
       label: 'Lokasi',
       width: '180px',
-      render: (value) => (
+      render: (value, item) => (
         <div className="flex items-center gap-1.5 text-gray-600">
           <FiMapPin size={14} />
-          <span className="text-sm">{value}</span>
+          <span className="text-sm">{value || item.campus?.campus_name || '-'}</span>
         </div>
       ),
     },
     {
-      key: 'attendees',
-      label: 'Peserta',
+      key: 'capacity',
+      label: 'Kapasitas',
       width: '100px',
-      render: (value, item) => (
+      render: (value) => (
         <div className="flex items-center gap-1.5">
           <FiUsers size={14} className="text-gray-400" />
-          <span className="text-sm">{value}/{item.capacity}</span>
+          <span className="text-sm">{value || '-'}</span>
         </div>
       ),
     },
     {
-      key: 'status',
+      key: 'is_active',
       label: 'Status',
-      width: '120px',
-      render: (value) => {
-        const statusColors = {
-          upcoming: 'bg-blue-100 text-blue-700',
-          ongoing: 'bg-green-100 text-green-700',
-          completed: 'bg-gray-100 text-gray-700',
-          cancelled: 'bg-red-100 text-red-700',
-        };
-        const statusLabels = {
-          upcoming: 'Akan Datang',
-          ongoing: 'Berlangsung',
-          completed: 'Selesai',
-          cancelled: 'Dibatalkan',
-        };
-        return (
-          <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${statusColors[value]}`}>
-            {statusLabels[value]}
-          </span>
-        );
-      },
+      width: '100px',
+      render: (value) => (
+        <span
+          className={`px-2.5 py-1 text-xs font-medium rounded-full ${
+            value === 1 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+          }`}
+        >
+          {value === 1 ? 'Aktif' : 'Nonaktif'}
+        </span>
+      ),
     },
   ];
 
   const filters = [
     {
-      key: 'category_id',
+      key: 'event_category_id',
       label: 'Kategori',
-      options: categories,
+      options: categoryOptions,
     },
     {
-      key: 'status',
+      key: 'event_type',
+      label: 'Tipe',
+      options: eventTypes,
+    },
+    {
+      key: 'is_active',
       label: 'Status',
-      options: statuses,
+      options: [
+        { value: '1', label: 'Aktif' },
+        { value: '0', label: 'Nonaktif' },
+      ],
     },
   ];
 
@@ -159,16 +237,18 @@ const Event = () => {
   const handleAdd = () => {
     setSelectedItem(null);
     setFormData({
-      title: '',
-      description: '',
-      category_id: '',
+      event_name: '',
+      event_description: '',
+      event_category_id: '',
+      campus_id: '',
       location: '',
       date: '',
       start_time: '',
       end_time: '',
       capacity: '',
       organizer: '',
-      status: 'upcoming',
+      event_type: '',
+      is_active: 1,
     });
     setIsModalOpen(true);
   };
@@ -176,16 +256,18 @@ const Event = () => {
   const handleEdit = (item) => {
     setSelectedItem(item);
     setFormData({
-      title: item.title,
-      description: item.description,
-      category_id: item.category_id,
-      location: item.location,
-      date: item.date,
-      start_time: item.start_time,
-      end_time: item.end_time,
-      capacity: item.capacity,
-      organizer: item.organizer,
-      status: item.status,
+      event_name: item.event_name || '',
+      event_description: item.event_description || '',
+      event_category_id: item.event_category_id?.toString() || '',
+      campus_id: item.campus_id?.toString() || '',
+      location: item.location || '',
+      date: item.date ? item.date.split('T')[0] : '',
+      start_time: item.start_time || '',
+      end_time: item.end_time || '',
+      capacity: item.capacity?.toString() || '',
+      organizer: item.organizer || '',
+      event_type: item.event_type || '',
+      is_active: item.is_active,
     });
     setIsModalOpen(true);
   };
@@ -200,14 +282,38 @@ const Event = () => {
     setIsDeleteOpen(true);
   };
 
-  const handleSubmit = () => {
-    console.log('Form submitted:', formData);
-    setIsModalOpen(false);
+  const handleSubmit = async () => {
+    setFormLoading(true);
+    try {
+      const submitData = {
+        ...formData,
+        event_category_id: formData.event_category_id
+          ? parseInt(formData.event_category_id)
+          : null,
+        campus_id: formData.campus_id ? parseInt(formData.campus_id) : null,
+        capacity: formData.capacity ? parseInt(formData.capacity) : null,
+      };
+
+      if (selectedItem) {
+        await dispatch(updateEvent({ id: selectedItem.event_id, data: submitData })).unwrap();
+      } else {
+        await dispatch(createEvent(submitData)).unwrap();
+      }
+      setIsModalOpen(false);
+    } catch (err) {
+      // Error handled by slice
+    } finally {
+      setFormLoading(false);
+    }
   };
 
-  const handleConfirmDelete = () => {
-    console.log('Deleted:', selectedItem);
-    setIsDeleteOpen(false);
+  const handleConfirmDelete = async () => {
+    try {
+      await dispatch(deleteEvent(selectedItem.event_id)).unwrap();
+      setIsDeleteOpen(false);
+    } catch (err) {
+      // Error handled by slice
+    }
   };
 
   const handleInputChange = (e) => {
@@ -215,19 +321,9 @@ const Event = () => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Filter data
-  const filteredData = data.filter((item) => {
-    const matchSearch =
-      item.title.toLowerCase().includes(searchValue.toLowerCase()) ||
-      item.location.toLowerCase().includes(searchValue.toLowerCase());
-    const matchCategory = !filterValues.category_id || item.category_id === filterValues.category_id;
-    const matchStatus = !filterValues.status || item.status === filterValues.status;
-    return matchSearch && matchCategory && matchStatus;
-  });
-
   // Stats
-  const upcomingCount = data.filter(d => d.status === 'upcoming').length;
-  const totalAttendees = data.reduce((sum, d) => sum + d.attendees, 0);
+  const totalEvents = events.pagination.total || 0;
+  const activeCount = events.data.filter((d) => d.is_active === 1).length;
 
   return (
     <MainLayout>
@@ -244,15 +340,15 @@ const Event = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div className="bg-white rounded-xl p-5 shadow-sm">
           <p className="text-sm text-gray-500 mb-1">Total Event</p>
-          <p className="text-2xl font-bold text-gray-800">{data.length}</p>
+          <p className="text-2xl font-bold text-gray-800">{totalEvents}</p>
         </div>
-        <div className="bg-blue-50 rounded-xl p-5 shadow-sm">
-          <p className="text-sm text-blue-600 mb-1">Event Akan Datang</p>
-          <p className="text-2xl font-bold text-blue-700">{upcomingCount}</p>
+        <div className="bg-green-50 rounded-xl p-5 shadow-sm">
+          <p className="text-sm text-green-600 mb-1">Event Aktif</p>
+          <p className="text-2xl font-bold text-green-700">{activeCount}</p>
         </div>
         <div className="bg-purple-50 rounded-xl p-5 shadow-sm">
-          <p className="text-sm text-purple-600 mb-1">Total Peserta</p>
-          <p className="text-2xl font-bold text-purple-700">{totalAttendees.toLocaleString('id-ID')}</p>
+          <p className="text-sm text-purple-600 mb-1">Kategori</p>
+          <p className="text-2xl font-bold text-purple-700">{eventCategories.data.length}</p>
         </div>
       </div>
 
@@ -269,17 +365,25 @@ const Event = () => {
         onExport={() => console.log('Export events')}
       />
 
-      <DataTable
-        columns={columns}
-        data={filteredData}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-        onView={handleView}
-        actionColumn={{ edit: true, delete: true, view: true }}
-        currentPage={currentPage}
-        totalPages={Math.ceil(filteredData.length / 10)}
-        onPageChange={setCurrentPage}
-      />
+      {events.loading ? (
+        <div className="flex items-center justify-center py-20">
+          <FiLoader className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={events.data}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+          onView={handleView}
+          actionColumn={{ edit: true, delete: true, view: true }}
+          currentPage={events.pagination.page}
+          totalPages={events.pagination.totalPages}
+          totalItems={events.pagination.total}
+          itemsPerPage={itemsPerPage}
+          onPageChange={setCurrentPage}
+        />
+      )}
 
       {/* Add/Edit Modal */}
       <Modal
@@ -288,20 +392,21 @@ const Event = () => {
         title={selectedItem ? 'Edit Event' : 'Tambah Event'}
         onSubmit={handleSubmit}
         size="lg"
+        loading={formLoading}
       >
         <FormInput
           label="Judul Event"
-          name="title"
-          value={formData.title}
+          name="event_name"
+          value={formData.event_name}
           onChange={handleInputChange}
           placeholder="Masukkan judul event"
           required
         />
         <FormInput
           label="Deskripsi"
-          name="description"
+          name="event_description"
           type="textarea"
-          value={formData.description}
+          value={formData.event_description}
           onChange={handleInputChange}
           placeholder="Deskripsi event"
           required
@@ -309,12 +414,29 @@ const Event = () => {
         <div className="grid grid-cols-2 gap-4">
           <FormInput
             label="Kategori"
-            name="category_id"
+            name="event_category_id"
             type="select"
-            value={formData.category_id}
+            value={formData.event_category_id}
             onChange={handleInputChange}
-            options={categories}
-            required
+            options={categoryOptions}
+          />
+          <FormInput
+            label="Tipe Event"
+            name="event_type"
+            type="select"
+            value={formData.event_type}
+            onChange={handleInputChange}
+            options={eventTypes}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <FormInput
+            label="Unit/Kampus"
+            name="campus_id"
+            type="select"
+            value={formData.campus_id}
+            onChange={handleInputChange}
+            options={campusOptions}
           />
           <FormInput
             label="Lokasi"
@@ -322,7 +444,6 @@ const Event = () => {
             value={formData.location}
             onChange={handleInputChange}
             placeholder="Contoh: Aula Gedung Rektorat"
-            required
           />
         </div>
         <div className="grid grid-cols-3 gap-4">
@@ -340,7 +461,6 @@ const Event = () => {
             type="time"
             value={formData.start_time}
             onChange={handleInputChange}
-            required
           />
           <FormInput
             label="Jam Selesai"
@@ -348,7 +468,6 @@ const Event = () => {
             type="time"
             value={formData.end_time}
             onChange={handleInputChange}
-            required
           />
         </div>
         <div className="grid grid-cols-2 gap-4">
@@ -370,22 +489,15 @@ const Event = () => {
         </div>
         <FormInput
           label="Status"
-          name="status"
+          name="is_active"
           type="select"
-          value={formData.status}
-          onChange={handleInputChange}
-          options={statuses}
+          value={formData.is_active?.toString()}
+          onChange={(e) => setFormData((prev) => ({ ...prev, is_active: parseInt(e.target.value) }))}
+          options={[
+            { value: '1', label: 'Aktif' },
+            { value: '0', label: 'Nonaktif' },
+          ]}
         />
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Banner Event
-          </label>
-          <div className="border-2 border-dashed border-gray-200 rounded-lg p-6 text-center hover:border-primary/50 transition-colors cursor-pointer">
-            <FiImage className="mx-auto text-gray-400 mb-2" size={32} />
-            <p className="text-sm text-gray-500">Klik untuk upload banner</p>
-            <p className="text-xs text-gray-400 mt-1">PNG, JPG (1200x630px recommended)</p>
-          </div>
-        </div>
       </Modal>
 
       {/* View Modal */}
@@ -401,38 +513,55 @@ const Event = () => {
             <div className="flex items-start gap-3">
               <div
                 className="w-3 h-3 rounded-full mt-1.5"
-                style={{ backgroundColor: selectedItem.color }}
+                style={{ backgroundColor: getEventColor(selectedItem.event_type) }}
               ></div>
               <div>
-                <h3 className="text-lg font-semibold text-gray-800">{selectedItem.title}</h3>
-                <p className="text-sm text-gray-500">{selectedItem.category}</p>
+                <h3 className="text-lg font-semibold text-gray-800">{selectedItem.event_name}</h3>
+                <p className="text-sm text-gray-500">{selectedItem.event_type || '-'}</p>
               </div>
             </div>
-            <div className="bg-gray-50 rounded-lg p-4">
-              <p className="text-sm text-gray-600">{selectedItem.description}</p>
-            </div>
+            {selectedItem.event_description && (
+              <div className="bg-gray-50 rounded-lg p-4">
+                <p className="text-sm text-gray-600">{selectedItem.event_description}</p>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-4">
               <div className="flex items-center gap-2">
                 <FiCalendar className="text-gray-400" />
-                <span className="text-sm">{new Date(selectedItem.date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                <span className="text-sm">
+                  {selectedItem.date
+                    ? new Date(selectedItem.date).toLocaleDateString('id-ID', {
+                        weekday: 'long',
+                        day: 'numeric',
+                        month: 'long',
+                        year: 'numeric',
+                      })
+                    : '-'}
+                </span>
               </div>
               <div className="flex items-center gap-2">
                 <FiClock className="text-gray-400" />
-                <span className="text-sm">{selectedItem.start_time} - {selectedItem.end_time}</span>
+                <span className="text-sm">
+                  {selectedItem.start_time || '-'} - {selectedItem.end_time || '-'}
+                </span>
               </div>
               <div className="flex items-center gap-2">
                 <FiMapPin className="text-gray-400" />
-                <span className="text-sm">{selectedItem.location}</span>
+                <span className="text-sm">
+                  {selectedItem.location || selectedItem.campus?.campus_name || '-'}
+                </span>
               </div>
               <div className="flex items-center gap-2">
                 <FiUsers className="text-gray-400" />
-                <span className="text-sm">{selectedItem.attendees}/{selectedItem.capacity} peserta</span>
+                <span className="text-sm">Kapasitas: {selectedItem.capacity || '-'}</span>
               </div>
             </div>
-            <div>
-              <p className="text-xs text-gray-500 mb-1">Penyelenggara</p>
-              <p className="text-sm font-medium">{selectedItem.organizer}</p>
-            </div>
+            {selectedItem.organizer && (
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Penyelenggara</p>
+                <p className="text-sm font-medium">{selectedItem.organizer}</p>
+              </div>
+            )}
           </div>
         )}
       </Modal>
@@ -443,9 +572,10 @@ const Event = () => {
         onClose={() => setIsDeleteOpen(false)}
         onConfirm={handleConfirmDelete}
         title="Hapus Event"
-        message={`Apakah Anda yakin ingin menghapus event "${selectedItem?.title}"?`}
+        message={`Apakah Anda yakin ingin menghapus event "${selectedItem?.event_name}"?`}
         confirmText="Ya, Hapus"
         type="danger"
+        loading={events.loading}
       />
     </MainLayout>
   );

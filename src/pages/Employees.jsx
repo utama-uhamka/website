@@ -1,5 +1,7 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
+import { toast } from 'react-hot-toast';
 import MainLayout from '../layouts/MainLayout';
 import {
   DataTable,
@@ -9,162 +11,187 @@ import {
   StatusBadge,
   ConfirmDialog,
   PageHeader,
+  AvatarWithFallback,
 } from '../components/ui';
-import { FiUsers, FiMail, FiPhone, FiMapPin } from 'react-icons/fi';
+import { FiUsers, FiMapPin, FiLoader } from 'react-icons/fi';
+import {
+  fetchUsers,
+  createUser,
+  updateUser,
+  deleteUser,
+  fetchUserStats,
+  clearUsersError,
+  clearUsersSuccess,
+} from '../store/usersSlice';
+import { fetchCampuses } from '../store/campusesSlice';
+import { fetchRoles } from '../store/masterSlice';
 
 const Employees = () => {
   const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const { data: users, pagination, loading, error, success, stats } = useSelector((state) => state.users);
+  const { data: campuses } = useSelector((state) => state.campuses);
+  const { roles } = useSelector((state) => state.master);
+
   const [searchValue, setSearchValue] = useState('');
   const [filterValues, setFilterValues] = useState({});
   const [currentPage, setCurrentPage] = useState(1);
-  const [sortColumn, setSortColumn] = useState('name');
-  const [sortDirection, setSortDirection] = useState('asc');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [formLoading, setFormLoading] = useState(false);
   const [formData, setFormData] = useState({
-    name: '',
+    full_name: '',
     email: '',
     phone: '',
-    role: '',
-    unit: '',
-    status: 'active',
+    role_id: '',
+    campus_id: '',
+    password: '',
+    is_active: 1,
   });
 
   const itemsPerPage = 10;
 
-  // Dummy data
-  const units = [
-    { value: '1', label: 'Unit A - Limau' },
-    { value: '2', label: 'Unit B - Ciracas' },
-    { value: '3', label: 'Unit C - Ciledug' },
-  ];
+  // Load users
+  const loadUsers = useCallback(() => {
+    const params = {
+      page: currentPage,
+      limit: itemsPerPage,
+      search: searchValue,
+      ...filterValues,
+    };
+    dispatch(fetchUsers(params));
+  }, [dispatch, currentPage, itemsPerPage, searchValue, filterValues]);
 
-  const roles = [
-    { value: 'Admin', label: 'Admin' },
-    { value: 'Staff', label: 'Staff' },
-    { value: 'Security', label: 'Security' },
-    { value: 'Cleaning', label: 'Cleaning Service' },
-    { value: 'Technician', label: 'Technician' },
-  ];
+  useEffect(() => {
+    loadUsers();
+  }, [loadUsers]);
 
-  const allData = [
-    { id: 1, name: 'Ahmad Fauzi', email: 'ahmad@uhamka.ac.id', phone: '08123456789', role: 'Admin', unit: 'Unit A - Limau', unit_id: '1', status: 'active' },
-    { id: 2, name: 'Siti Nurhaliza', email: 'siti@uhamka.ac.id', phone: '08234567890', role: 'Staff', unit: 'Unit A - Limau', unit_id: '1', status: 'active' },
-    { id: 3, name: 'Budi Santoso', email: 'budi@uhamka.ac.id', phone: '08345678901', role: 'Security', unit: 'Unit A - Limau', unit_id: '1', status: 'active' },
-    { id: 4, name: 'Dewi Lestari', email: 'dewi@uhamka.ac.id', phone: '08456789012', role: 'Cleaning', unit: 'Unit B - Ciracas', unit_id: '2', status: 'inactive' },
-    { id: 5, name: 'Eko Prasetyo', email: 'eko@uhamka.ac.id', phone: '08567890123', role: 'Technician', unit: 'Unit B - Ciracas', unit_id: '2', status: 'active' },
-    { id: 6, name: 'Fitri Handayani', email: 'fitri@uhamka.ac.id', phone: '08678901234', role: 'Staff', unit: 'Unit C - Ciledug', unit_id: '3', status: 'active' },
-    { id: 7, name: 'Gunawan Wijaya', email: 'gunawan@uhamka.ac.id', phone: '08789012345', role: 'Security', unit: 'Unit C - Ciledug', unit_id: '3', status: 'active' },
-    { id: 8, name: 'Hani Rahmawati', email: 'hani@uhamka.ac.id', phone: '08890123456', role: 'Admin', unit: 'Unit B - Ciracas', unit_id: '2', status: 'active' },
-    { id: 9, name: 'Irfan Hakim', email: 'irfan@uhamka.ac.id', phone: '08901234567', role: 'Staff', unit: 'Unit A - Limau', unit_id: '1', status: 'active' },
-    { id: 10, name: 'Julia Perez', email: 'julia@uhamka.ac.id', phone: '08012345678', role: 'Cleaning', unit: 'Unit A - Limau', unit_id: '1', status: 'active' },
-  ];
+  // Load campuses and roles for filters
+  useEffect(() => {
+    dispatch(fetchCampuses({ limit: 100 }));
+    dispatch(fetchRoles({ limit: 100 }));
+    dispatch(fetchUserStats());
+  }, [dispatch]);
+
+  // Handle errors
+  useEffect(() => {
+    if (error) {
+      toast.error(error);
+      dispatch(clearUsersError());
+    }
+  }, [error, dispatch]);
+
+  // Handle success
+  useEffect(() => {
+    if (success) {
+      toast.success(success);
+      dispatch(clearUsersSuccess());
+      loadUsers();
+      dispatch(fetchUserStats());
+    }
+  }, [success, dispatch, loadUsers]);
+
+  // Reset page when search/filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchValue, filterValues]);
+
+  // Campus options for filter
+  const campusOptions = campuses.map((c) => ({
+    value: c.campus_id?.toString(),
+    label: c.campus_name,
+  }));
+
+  // Role options for filter
+  const roleOptions = roles.data.map((r) => ({
+    value: r.role_id?.toString(),
+    label: r.role_name,
+  }));
 
   const columns = [
     {
-      key: 'name',
+      key: 'full_name',
       label: 'Nama Karyawan',
       render: (value, row) => (
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-            <span className="text-primary font-semibold">{value.charAt(0)}</span>
-          </div>
+          <AvatarWithFallback src={row.photo_1} alt={value} size={40} />
           <div>
-            <p className="font-medium text-gray-800">{value}</p>
-            <p className="text-xs text-gray-500">{row.email}</p>
+            <p className="font-medium text-gray-800">{value || '-'}</p>
+            <p className="text-xs text-gray-500">{row.email || '-'}</p>
           </div>
         </div>
       ),
     },
-    { key: 'phone', label: 'Telepon', width: '140px' },
-    { key: 'role', label: 'Role', width: '120px' },
-    { key: 'unit', label: 'Unit' },
+    { key: 'phone', label: 'Telepon', width: '140px', render: (value) => value || '-' },
     {
-      key: 'status',
+      key: 'role',
+      label: 'Role',
+      width: '120px',
+      render: (value, row) => row.role?.role_name || '-',
+    },
+    {
+      key: 'campus',
+      label: 'Unit',
+      render: (value, row) => row.campus?.campus_name || '-',
+    },
+    {
+      key: 'is_active',
       label: 'Status',
       width: '100px',
-      render: (value) => <StatusBadge status={value} />,
+      render: (value) => <StatusBadge status={value === 1 ? 'active' : 'inactive'} />,
     },
   ];
 
   const filters = [
     {
-      key: 'unit_id',
+      key: 'campus_id',
       label: 'Unit',
-      options: units,
+      options: campusOptions,
     },
     {
-      key: 'role',
+      key: 'role_id',
       label: 'Role',
-      options: roles,
+      options: roleOptions,
     },
     {
-      key: 'status',
+      key: 'is_active',
       label: 'Status',
       options: [
-        { value: 'active', label: 'Aktif' },
-        { value: 'inactive', label: 'Nonaktif' },
+        { value: '1', label: 'Aktif' },
+        { value: '0', label: 'Nonaktif' },
       ],
     },
   ];
-
-  // Filter, sort, and paginate data
-  const { paginatedData, totalItems, totalPages } = useMemo(() => {
-    let filtered = allData.filter((item) => {
-      const matchSearch =
-        item.name.toLowerCase().includes(searchValue.toLowerCase()) ||
-        item.email.toLowerCase().includes(searchValue.toLowerCase());
-      const matchUnit = !filterValues.unit_id || item.unit_id === filterValues.unit_id;
-      const matchRole = !filterValues.role || item.role === filterValues.role;
-      const matchStatus = !filterValues.status || item.status === filterValues.status;
-      return matchSearch && matchUnit && matchRole && matchStatus;
-    });
-
-    filtered.sort((a, b) => {
-      const aVal = a[sortColumn] || '';
-      const bVal = b[sortColumn] || '';
-      return sortDirection === 'asc'
-        ? aVal.toString().localeCompare(bVal.toString())
-        : bVal.toString().localeCompare(aVal.toString());
-    });
-
-    const total = filtered.length;
-    const pages = Math.ceil(total / itemsPerPage);
-    const start = (currentPage - 1) * itemsPerPage;
-    const paginated = filtered.slice(start, start + itemsPerPage);
-
-    return { paginatedData: paginated, totalItems: total, totalPages: pages };
-  }, [allData, searchValue, filterValues, sortColumn, sortDirection, currentPage]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchValue, filterValues]);
 
   const handleFilterChange = (key, value) => {
     setFilterValues((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleSort = (column, direction) => {
-    setSortColumn(column);
-    setSortDirection(direction);
-  };
-
   const handleAdd = () => {
     setSelectedItem(null);
-    setFormData({ name: '', email: '', phone: '', role: '', unit: '', status: 'active' });
+    setFormData({
+      full_name: '',
+      email: '',
+      phone: '',
+      role_id: '',
+      campus_id: '',
+      password: '',
+      is_active: 1,
+    });
     setIsModalOpen(true);
   };
 
   const handleEdit = (item) => {
     setSelectedItem(item);
     setFormData({
-      name: item.name,
-      email: item.email,
-      phone: item.phone,
-      role: item.role,
-      unit: item.unit_id,
-      status: item.status,
+      full_name: item.full_name || '',
+      email: item.email || '',
+      phone: item.phone || '',
+      role_id: item.role_id?.toString() || '',
+      campus_id: item.campus_id?.toString() || '',
+      password: '',
+      is_active: item.is_active,
     });
     setIsModalOpen(true);
   };
@@ -175,17 +202,52 @@ const Employees = () => {
   };
 
   const handleView = (item) => {
-    navigate(`/account/${item.id}`);
+    navigate(`/employee/${item.user_id}`);
   };
 
-  const handleSubmit = () => {
-    console.log('Form submitted:', formData);
-    setIsModalOpen(false);
+  const handleSubmit = async () => {
+    setFormLoading(true);
+    try {
+      const submitData = {
+        full_name: formData.full_name,
+        email: formData.email,
+        phone: formData.phone,
+        role_id: parseInt(formData.role_id),
+        campus_id: parseInt(formData.campus_id),
+        is_active: parseInt(formData.is_active),
+      };
+
+      // Only include password if provided (for new user or password change)
+      if (formData.password) {
+        submitData.password = formData.password;
+      }
+
+      if (selectedItem) {
+        await dispatch(updateUser({ id: selectedItem.user_id, data: submitData })).unwrap();
+      } else {
+        // Password is required for new user
+        if (!formData.password) {
+          toast.error('Password wajib diisi untuk karyawan baru');
+          setFormLoading(false);
+          return;
+        }
+        await dispatch(createUser(submitData)).unwrap();
+      }
+      setIsModalOpen(false);
+    } catch (err) {
+      // Error handled by slice
+    } finally {
+      setFormLoading(false);
+    }
   };
 
-  const handleConfirmDelete = () => {
-    console.log('Deleted:', selectedItem);
-    setIsDeleteOpen(false);
+  const handleConfirmDelete = async () => {
+    try {
+      await dispatch(deleteUser(selectedItem.user_id)).unwrap();
+      setIsDeleteOpen(false);
+    } catch (err) {
+      // Error handled by slice
+    }
   };
 
   const handleInputChange = (e) => {
@@ -193,10 +255,10 @@ const Employees = () => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Stats
-  const totalEmployees = allData.length;
-  const activeEmployees = allData.filter(e => e.status === 'active').length;
-  const unitCount = [...new Set(allData.map(e => e.unit))].length;
+  // Stats from API or count from current data
+  const totalEmployees = stats?.total || pagination.total || 0;
+  const activeEmployees = stats?.active || users.filter((e) => e.is_active === 1).length;
+  const unitCount = stats?.unitCount || [...new Set(users.map((e) => e.campus_id).filter(Boolean))].length;
 
   return (
     <MainLayout>
@@ -258,23 +320,26 @@ const Employees = () => {
         addLabel="Tambah Karyawan"
       />
 
-      <DataTable
-        columns={columns}
-        data={paginatedData}
-        onView={handleView}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-        currentPage={currentPage}
-        totalPages={totalPages}
-        totalItems={totalItems}
-        itemsPerPage={itemsPerPage}
-        onPageChange={setCurrentPage}
-        onSort={handleSort}
-        sortColumn={sortColumn}
-        sortDirection={sortDirection}
-        showActions={true}
-        actionColumn={{ view: true, edit: true, delete: true }}
-      />
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <FiLoader className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={users}
+          onView={handleView}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+          currentPage={pagination.page}
+          totalPages={pagination.totalPages}
+          totalItems={pagination.total}
+          itemsPerPage={itemsPerPage}
+          onPageChange={setCurrentPage}
+          showActions={true}
+          actionColumn={{ view: true, edit: true, delete: true }}
+        />
+      )}
 
       {/* Add/Edit Modal */}
       <Modal
@@ -282,11 +347,12 @@ const Employees = () => {
         onClose={() => setIsModalOpen(false)}
         title={selectedItem ? 'Edit Karyawan' : 'Tambah Karyawan'}
         onSubmit={handleSubmit}
+        loading={formLoading}
       >
         <FormInput
           label="Nama Lengkap"
-          name="name"
-          value={formData.name}
+          name="full_name"
+          value={formData.full_name}
           onChange={handleInputChange}
           placeholder="Contoh: Ahmad Fauzi"
           required
@@ -312,34 +378,45 @@ const Employees = () => {
         <div className="grid grid-cols-2 gap-4">
           <FormInput
             label="Role"
-            name="role"
+            name="role_id"
             type="select"
-            value={formData.role}
+            value={formData.role_id}
             onChange={handleInputChange}
-            options={roles}
+            options={roleOptions}
             required
           />
           <FormInput
             label="Unit"
-            name="unit"
+            name="campus_id"
             type="select"
-            value={formData.unit}
+            value={formData.campus_id}
             onChange={handleInputChange}
-            options={units}
+            options={campusOptions}
             required
           />
         </div>
-        <FormInput
-          label="Status"
-          name="status"
-          type="select"
-          value={formData.status}
-          onChange={handleInputChange}
-          options={[
-            { value: 'active', label: 'Aktif' },
-            { value: 'inactive', label: 'Nonaktif' },
-          ]}
-        />
+        <div className="grid grid-cols-2 gap-4">
+          <FormInput
+            label={selectedItem ? 'Password (kosongkan jika tidak diubah)' : 'Password'}
+            name="password"
+            type="password"
+            value={formData.password}
+            onChange={handleInputChange}
+            placeholder="********"
+            required={!selectedItem}
+          />
+          <FormInput
+            label="Status"
+            name="is_active"
+            type="select"
+            value={formData.is_active?.toString()}
+            onChange={(e) => setFormData((prev) => ({ ...prev, is_active: parseInt(e.target.value) }))}
+            options={[
+              { value: '1', label: 'Aktif' },
+              { value: '0', label: 'Nonaktif' },
+            ]}
+          />
+        </div>
       </Modal>
 
       {/* Delete Confirmation */}
@@ -348,9 +425,10 @@ const Employees = () => {
         onClose={() => setIsDeleteOpen(false)}
         onConfirm={handleConfirmDelete}
         title="Hapus Karyawan"
-        message={`Apakah Anda yakin ingin menghapus "${selectedItem?.name}"? Tindakan ini tidak dapat dibatalkan.`}
+        message={`Apakah Anda yakin ingin menghapus "${selectedItem?.full_name}"? Tindakan ini tidak dapat dibatalkan.`}
         confirmText="Ya, Hapus"
         type="danger"
+        loading={loading}
       />
     </MainLayout>
   );

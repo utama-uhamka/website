@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { useSelector } from 'react-redux';
+import { useState, useEffect } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
+import { toast } from 'react-hot-toast';
 import MainLayout from '../layouts/MainLayout';
 import { PageHeader } from '../components/ui';
 import {
@@ -10,20 +11,31 @@ import {
   FiAlertCircle,
   FiCheckCircle,
   FiInfo,
+  FiLoader,
 } from 'react-icons/fi';
-import Swal from 'sweetalert2';
+import { changePasswordAsync, clearError } from '../store/authSlice';
 
 const Settings = () => {
-  const { user } = useSelector((state) => state.auth);
+  const dispatch = useDispatch();
+  const { error } = useSelector((state) => state.auth);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [formLoading, setFormLoading] = useState(false);
   const [formData, setFormData] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: '',
+    current_password: '',
+    new_password: '',
+    confirm_password: '',
   });
   const [errors, setErrors] = useState({});
+
+  // Handle errors from redux
+  useEffect(() => {
+    if (error) {
+      toast.error(error);
+      dispatch(clearError());
+    }
+  }, [error, dispatch]);
 
   const checkPasswordStrength = (password) => {
     let strength = 0;
@@ -53,7 +65,7 @@ const Settings = () => {
     }
   };
 
-  const passwordStrength = checkPasswordStrength(formData.newPassword);
+  const passwordStrength = checkPasswordStrength(formData.new_password);
   const strengthInfo = getStrengthLabel(passwordStrength);
 
   const handleChange = (e) => {
@@ -66,56 +78,53 @@ const Settings = () => {
 
   const validateForm = () => {
     const newErrors = {};
-    if (!formData.currentPassword) {
-      newErrors.currentPassword = 'Password saat ini harus diisi';
+    if (!formData.current_password) {
+      newErrors.current_password = 'Password saat ini harus diisi';
     }
-    if (!formData.newPassword) {
-      newErrors.newPassword = 'Password baru harus diisi';
-    } else if (formData.newPassword.length < 8) {
-      newErrors.newPassword = 'Password minimal 8 karakter';
+    if (!formData.new_password) {
+      newErrors.new_password = 'Password baru harus diisi';
+    } else if (formData.new_password.length < 8) {
+      newErrors.new_password = 'Password minimal 8 karakter';
     }
-    if (!formData.confirmPassword) {
-      newErrors.confirmPassword = 'Konfirmasi password harus diisi';
-    } else if (formData.newPassword !== formData.confirmPassword) {
-      newErrors.confirmPassword = 'Password tidak cocok';
+    if (!formData.confirm_password) {
+      newErrors.confirm_password = 'Konfirmasi password harus diisi';
+    } else if (formData.new_password !== formData.confirm_password) {
+      newErrors.confirm_password = 'Password tidak cocok';
     }
-    if (formData.currentPassword === formData.newPassword && formData.newPassword) {
-      newErrors.newPassword = 'Password baru harus berbeda dengan password saat ini';
+    if (formData.current_password === formData.new_password && formData.new_password) {
+      newErrors.new_password = 'Password baru harus berbeda dengan password saat ini';
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
 
-    Swal.fire({
-      title: 'Mengubah Password...',
-      allowOutsideClick: false,
-      didOpen: () => {
-        Swal.showLoading();
-      },
-    });
-
-    setTimeout(() => {
-      Swal.fire({
-        icon: 'success',
-        title: 'Berhasil!',
-        text: 'Password berhasil diubah',
-        timer: 2000,
-        showConfirmButton: false,
-      });
-      setFormData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-    }, 1500);
+    setFormLoading(true);
+    try {
+      await dispatch(
+        changePasswordAsync({
+          current_password: formData.current_password,
+          new_password: formData.new_password,
+        })
+      ).unwrap();
+      toast.success('Password berhasil diubah');
+      setFormData({ current_password: '', new_password: '', confirm_password: '' });
+    } catch (err) {
+      // Error handled by effect
+    } finally {
+      setFormLoading(false);
+    }
   };
 
   const passwordRequirements = [
-    { met: formData.newPassword.length >= 8, text: 'Minimal 8 karakter' },
-    { met: /[a-z]/.test(formData.newPassword), text: 'Huruf kecil (a-z)' },
-    { met: /[A-Z]/.test(formData.newPassword), text: 'Huruf besar (A-Z)' },
-    { met: /[0-9]/.test(formData.newPassword), text: 'Angka (0-9)' },
-    { met: /[^a-zA-Z0-9]/.test(formData.newPassword), text: 'Karakter khusus (!@#$%^&*)' },
+    { met: formData.new_password.length >= 8, text: 'Minimal 8 karakter' },
+    { met: /[a-z]/.test(formData.new_password), text: 'Huruf kecil (a-z)' },
+    { met: /[A-Z]/.test(formData.new_password), text: 'Huruf besar (A-Z)' },
+    { met: /[0-9]/.test(formData.new_password), text: 'Angka (0-9)' },
+    { met: /[^a-zA-Z0-9]/.test(formData.new_password), text: 'Karakter khusus (!@#$%^&*)' },
   ];
 
   return (
@@ -150,19 +159,26 @@ const Settings = () => {
                 <div className="relative">
                   <input
                     type={showCurrentPassword ? 'text' : 'password'}
-                    name="currentPassword"
-                    value={formData.currentPassword}
+                    name="current_password"
+                    value={formData.current_password}
                     onChange={handleChange}
-                    className={`w-full px-4 py-2.5 pr-12 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary ${errors.currentPassword ? 'border-red-500' : 'border-gray-300'}`}
+                    className={`w-full px-4 py-2.5 pr-12 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary ${
+                      errors.current_password ? 'border-red-500' : 'border-gray-300'
+                    }`}
                     placeholder="Masukkan password saat ini"
                   />
-                  <button type="button" onClick={() => setShowCurrentPassword(!showCurrentPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700">
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                  >
                     {showCurrentPassword ? <FiEyeOff size={20} /> : <FiEye size={20} />}
                   </button>
                 </div>
-                {errors.currentPassword && (
+                {errors.current_password && (
                   <p className="mt-1 text-sm text-red-500 flex items-center gap-1">
-                    <FiAlertCircle size={14} />{errors.currentPassword}
+                    <FiAlertCircle size={14} />
+                    {errors.current_password}
                   </p>
                 )}
               </div>
@@ -174,30 +190,44 @@ const Settings = () => {
                 <div className="relative">
                   <input
                     type={showNewPassword ? 'text' : 'password'}
-                    name="newPassword"
-                    value={formData.newPassword}
+                    name="new_password"
+                    value={formData.new_password}
                     onChange={handleChange}
-                    className={`w-full px-4 py-2.5 pr-12 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary ${errors.newPassword ? 'border-red-500' : 'border-gray-300'}`}
+                    className={`w-full px-4 py-2.5 pr-12 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary ${
+                      errors.new_password ? 'border-red-500' : 'border-gray-300'
+                    }`}
                     placeholder="Masukkan password baru"
                   />
-                  <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700">
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                  >
                     {showNewPassword ? <FiEyeOff size={20} /> : <FiEye size={20} />}
                   </button>
                 </div>
-                {errors.newPassword && (
+                {errors.new_password && (
                   <p className="mt-1 text-sm text-red-500 flex items-center gap-1">
-                    <FiAlertCircle size={14} />{errors.newPassword}
+                    <FiAlertCircle size={14} />
+                    {errors.new_password}
                   </p>
                 )}
-                {formData.newPassword && (
+                {formData.new_password && (
                   <div className="mt-3">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm text-gray-600">Kekuatan Password:</span>
-                      <span className={`text-sm font-medium ${strengthInfo.textColor}`}>{strengthInfo.label}</span>
+                      <span className={`text-sm font-medium ${strengthInfo.textColor}`}>
+                        {strengthInfo.label}
+                      </span>
                     </div>
                     <div className="flex gap-1">
                       {[1, 2, 3, 4, 5].map((level) => (
-                        <div key={level} className={`h-2 flex-1 rounded-full transition-colors ${level <= passwordStrength ? strengthInfo.color : 'bg-gray-200'}`} />
+                        <div
+                          key={level}
+                          className={`h-2 flex-1 rounded-full transition-colors ${
+                            level <= passwordStrength ? strengthInfo.color : 'bg-gray-200'
+                          }`}
+                        />
                       ))}
                     </div>
                   </div>
@@ -211,32 +241,49 @@ const Settings = () => {
                 <div className="relative">
                   <input
                     type={showConfirmPassword ? 'text' : 'password'}
-                    name="confirmPassword"
-                    value={formData.confirmPassword}
+                    name="confirm_password"
+                    value={formData.confirm_password}
                     onChange={handleChange}
-                    className={`w-full px-4 py-2.5 pr-12 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary ${errors.confirmPassword ? 'border-red-500' : 'border-gray-300'}`}
+                    className={`w-full px-4 py-2.5 pr-12 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary ${
+                      errors.confirm_password ? 'border-red-500' : 'border-gray-300'
+                    }`}
                     placeholder="Konfirmasi password baru"
                   />
-                  <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700">
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                  >
                     {showConfirmPassword ? <FiEyeOff size={20} /> : <FiEye size={20} />}
                   </button>
                 </div>
-                {errors.confirmPassword && (
+                {errors.confirm_password && (
                   <p className="mt-1 text-sm text-red-500 flex items-center gap-1">
-                    <FiAlertCircle size={14} />{errors.confirmPassword}
+                    <FiAlertCircle size={14} />
+                    {errors.confirm_password}
                   </p>
                 )}
-                {formData.confirmPassword && formData.newPassword === formData.confirmPassword && (
-                  <p className="mt-1 text-sm text-green-500 flex items-center gap-1">
-                    <FiCheckCircle size={14} />Password cocok
-                  </p>
-                )}
+                {formData.confirm_password &&
+                  formData.new_password === formData.confirm_password && (
+                    <p className="mt-1 text-sm text-green-500 flex items-center gap-1">
+                      <FiCheckCircle size={14} />
+                      Password cocok
+                    </p>
+                  )}
               </div>
 
               <div className="pt-4">
-                <button type="submit" className="w-full px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors font-medium flex items-center justify-center gap-2">
-                  <FiLock className="w-5 h-5" />
-                  Ubah Password
+                <button
+                  type="submit"
+                  disabled={formLoading}
+                  className="w-full px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {formLoading ? (
+                    <FiLoader className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <FiLock className="w-5 h-5" />
+                  )}
+                  {formLoading ? 'Mengubah Password...' : 'Ubah Password'}
                 </button>
               </div>
             </form>
@@ -254,8 +301,25 @@ const Settings = () => {
 
             <ul className="space-y-3">
               {passwordRequirements.map((req, index) => (
-                <li key={index} className={`flex items-center gap-2 text-sm ${formData.newPassword ? (req.met ? 'text-green-600' : 'text-gray-500') : 'text-gray-500'}`}>
-                  {formData.newPassword ? (req.met ? <FiCheckCircle className="w-4 h-4 text-green-500" /> : <div className="w-4 h-4 rounded-full border-2 border-gray-300" />) : <div className="w-4 h-4 rounded-full border-2 border-gray-300" />}
+                <li
+                  key={index}
+                  className={`flex items-center gap-2 text-sm ${
+                    formData.new_password
+                      ? req.met
+                        ? 'text-green-600'
+                        : 'text-gray-500'
+                      : 'text-gray-500'
+                  }`}
+                >
+                  {formData.new_password ? (
+                    req.met ? (
+                      <FiCheckCircle className="w-4 h-4 text-green-500" />
+                    ) : (
+                      <div className="w-4 h-4 rounded-full border-2 border-gray-300" />
+                    )
+                  ) : (
+                    <div className="w-4 h-4 rounded-full border-2 border-gray-300" />
+                  )}
                   {req.text}
                 </li>
               ))}

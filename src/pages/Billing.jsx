@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { toast } from 'react-hot-toast';
 import MainLayout from '../layouts/MainLayout';
 import {
   DataTable,
@@ -7,36 +9,61 @@ import {
   StatusBadge,
   PageHeader,
 } from '../components/ui';
-import { FiFileText, FiDownload, FiCalendar } from 'react-icons/fi';
+import { FiFileText, FiDownload, FiLoader } from 'react-icons/fi';
+import { fetchBillings, clearDataError } from '../store/dataSlice';
+import { fetchCampuses } from '../store/campusesSlice';
 
 const Billing = () => {
+  const dispatch = useDispatch();
+  const { billings } = useSelector((state) => state.data);
+  const { data: campuses } = useSelector((state) => state.campuses);
+
   const [searchValue, setSearchValue] = useState('');
   const [filterValues, setFilterValues] = useState({});
   const [currentPage, setCurrentPage] = useState(1);
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
 
-  // Dummy data
-  const accounts = [
-    { value: '1', label: 'PLN Gedung Rektorat' },
-    { value: '2', label: 'PDAM Gedung Rektorat' },
-    { value: '3', label: 'PLN Gedung FKIP' },
-    { value: '4', label: 'Internet Kampus A' },
-  ];
+  const itemsPerPage = 10;
 
-  const campuses = [
-    { value: '1', label: 'Kampus A - Limau' },
-    { value: '2', label: 'Kampus B - Ciracas' },
-  ];
+  // Load billings
+  const loadBillings = useCallback(() => {
+    const params = {
+      page: currentPage,
+      limit: itemsPerPage,
+      search: searchValue,
+      ...filterValues,
+    };
+    dispatch(fetchBillings(params));
+  }, [dispatch, currentPage, itemsPerPage, searchValue, filterValues]);
 
-  const data = [
-    { id: 1, account: 'PLN Gedung Rektorat', account_id: '1', campus: 'Kampus A - Limau', campus_id: '1', type: 'pln', period: 'Desember 2024', meter_start: 45230, meter_end: 47850, usage: 2620, amount: 3540000, due_date: '2025-01-10', payment_date: '2025-01-05', status: 'paid' },
-    { id: 2, account: 'PDAM Gedung Rektorat', account_id: '2', campus: 'Kampus A - Limau', campus_id: '1', type: 'pdam', period: 'Desember 2024', meter_start: 1250, meter_end: 1380, usage: 130, amount: 520000, due_date: '2025-01-15', payment_date: null, status: 'unpaid' },
-    { id: 3, account: 'PLN Gedung FKIP', account_id: '3', campus: 'Kampus B - Ciracas', campus_id: '2', type: 'pln', period: 'Desember 2024', meter_start: 32100, meter_end: 34500, usage: 2400, amount: 3240000, due_date: '2025-01-10', payment_date: '2025-01-08', status: 'paid' },
-    { id: 4, account: 'Internet Kampus A', account_id: '4', campus: 'Kampus A - Limau', campus_id: '1', type: 'internet', period: 'Desember 2024', meter_start: null, meter_end: null, usage: null, amount: 5000000, due_date: '2025-01-05', payment_date: '2025-01-03', status: 'paid' },
-    { id: 5, account: 'PLN Gedung Rektorat', account_id: '1', campus: 'Kampus A - Limau', campus_id: '1', type: 'pln', period: 'November 2024', meter_start: 42600, meter_end: 45230, usage: 2630, amount: 3553500, due_date: '2024-12-10', payment_date: '2024-12-08', status: 'paid' },
-    { id: 6, account: 'PDAM Gedung Rektorat', account_id: '2', campus: 'Kampus A - Limau', campus_id: '1', type: 'pdam', period: 'November 2024', meter_start: 1120, meter_end: 1250, usage: 130, amount: 520000, due_date: '2024-12-15', payment_date: '2024-12-12', status: 'paid' },
-  ];
+  useEffect(() => {
+    loadBillings();
+  }, [loadBillings]);
+
+  // Load campuses for filter
+  useEffect(() => {
+    dispatch(fetchCampuses({ limit: 100 }));
+  }, [dispatch]);
+
+  // Handle errors
+  useEffect(() => {
+    if (billings.error) {
+      toast.error(billings.error);
+      dispatch(clearDataError());
+    }
+  }, [billings.error, dispatch]);
+
+  // Reset page when search/filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchValue, filterValues]);
+
+  // Campus options for filter
+  const campusOptions = campuses.map((c) => ({
+    value: c.campus_id?.toString(),
+    label: c.campus_name,
+  }));
 
   const columns = [
     {
@@ -45,19 +72,15 @@ const Billing = () => {
       render: (value, item) => (
         <div className="flex items-center gap-3">
           <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-            item.type === 'pln' ? 'bg-yellow-100' :
-            item.type === 'pdam' ? 'bg-blue-100' :
-            'bg-purple-100'
+            item.billing_type === 'pln' ? 'bg-yellow-100' : 'bg-blue-100'
           }`}>
             <FiFileText className={`${
-              item.type === 'pln' ? 'text-yellow-600' :
-              item.type === 'pdam' ? 'text-blue-600' :
-              'text-purple-600'
+              item.billing_type === 'pln' ? 'text-yellow-600' : 'text-blue-600'
             }`} size={18} />
           </div>
           <div>
-            <p className="font-medium text-gray-800">{value}</p>
-            <p className="text-xs text-gray-500">{item.campus}</p>
+            <p className="font-medium text-gray-800">{item.account?.account_name || '-'}</p>
+            <p className="text-xs text-gray-500">{item.campus?.campus_name || '-'}</p>
           </div>
         </div>
       ),
@@ -66,23 +89,30 @@ const Billing = () => {
       key: 'period',
       label: 'Periode',
       width: '130px',
+      render: (value, item) => {
+        const date = item.date ? new Date(item.date) : null;
+        return date ? date.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }) : '-';
+      },
     },
     {
       key: 'usage',
       label: 'Pemakaian',
       width: '120px',
       render: (value, item) => {
-        if (!value) return '-';
-        const unit = item.type === 'pln' ? 'kWh' : item.type === 'pdam' ? 'm³' : '';
-        return `${value.toLocaleString('id-ID')} ${unit}`;
+        if (!item.meter_end || !item.meter_start) return '-';
+        const usage = item.meter_end - item.meter_start;
+        const unit = item.billing_type === 'pln' ? 'kWh' : item.billing_type === 'pdam' ? 'm³' : '';
+        return `${usage.toLocaleString('id-ID')} ${unit}`;
       },
     },
     {
-      key: 'amount',
+      key: 'total_billing',
       label: 'Tagihan',
       width: '140px',
       render: (value) => (
-        <span className="font-semibold text-gray-800">Rp {value.toLocaleString('id-ID')}</span>
+        <span className="font-semibold text-gray-800">
+          Rp {value ? parseInt(value).toLocaleString('id-ID') : '0'}
+        </span>
       ),
     },
     {
@@ -90,6 +120,7 @@ const Billing = () => {
       label: 'Jatuh Tempo',
       width: '120px',
       render: (value) => {
+        if (!value) return '-';
         const date = new Date(value);
         return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
       },
@@ -98,32 +129,30 @@ const Billing = () => {
       key: 'status',
       label: 'Status',
       width: '100px',
-      render: (value) => <StatusBadge status={value} />,
+      render: (value) => <StatusBadge status={value === 1 ? 'paid' : 'unpaid'} />,
     },
   ];
 
   const filters = [
     {
       key: 'campus_id',
-      label: 'Kampus',
-      options: campuses,
+      label: 'Unit',
+      options: campusOptions,
     },
     {
-      key: 'type',
+      key: 'billing_type',
       label: 'Tipe',
       options: [
         { value: 'pln', label: 'PLN' },
         { value: 'pdam', label: 'PDAM' },
-        { value: 'internet', label: 'Internet' },
       ],
     },
     {
       key: 'status',
       label: 'Status',
       options: [
-        { value: 'paid', label: 'Lunas' },
-        { value: 'unpaid', label: 'Belum Bayar' },
-        { value: 'partial', label: 'Sebagian' },
+        { value: '1', label: 'Lunas' },
+        { value: '0', label: 'Belum Bayar' },
       ],
     },
   ];
@@ -137,26 +166,19 @@ const Billing = () => {
     setIsViewOpen(true);
   };
 
-  // Filter data
-  const filteredData = data.filter((item) => {
-    const matchSearch =
-      item.account.toLowerCase().includes(searchValue.toLowerCase()) ||
-      item.period.toLowerCase().includes(searchValue.toLowerCase());
-    const matchCampus = !filterValues.campus_id || item.campus_id === filterValues.campus_id;
-    const matchType = !filterValues.type || item.type === filterValues.type;
-    const matchStatus = !filterValues.status || item.status === filterValues.status;
-    return matchSearch && matchCampus && matchType && matchStatus;
-  });
-
-  // Summary stats
-  const totalUnpaid = data.filter(d => d.status === 'unpaid').reduce((sum, d) => sum + d.amount, 0);
-  const totalPaid = data.filter(d => d.status === 'paid').reduce((sum, d) => sum + d.amount, 0);
+  // Calculate summary
+  const totalUnpaid = billings.data
+    .filter((d) => d.status === 0)
+    .reduce((sum, d) => sum + parseFloat(d.total_billing || 0), 0);
+  const totalPaid = billings.data
+    .filter((d) => d.status === 1)
+    .reduce((sum, d) => sum + parseFloat(d.total_billing || 0), 0);
 
   return (
     <MainLayout>
       <PageHeader
         title="Billing"
-        subtitle="Lihat tagihan PLN, PDAM, dan utilitas lainnya"
+        subtitle="Lihat tagihan PLN dan PDAM"
         breadcrumbs={[
           { label: 'Dashboard', path: '/dashboard' },
           { label: 'Billing' },
@@ -167,7 +189,9 @@ const Billing = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div className="bg-white rounded-xl p-5 shadow-sm">
           <p className="text-sm text-gray-500 mb-1">Total Tagihan</p>
-          <p className="text-2xl font-bold text-gray-800">Rp {(totalPaid + totalUnpaid).toLocaleString('id-ID')}</p>
+          <p className="text-2xl font-bold text-gray-800">
+            Rp {(totalPaid + totalUnpaid).toLocaleString('id-ID')}
+          </p>
         </div>
         <div className="bg-green-50 rounded-xl p-5 shadow-sm">
           <p className="text-sm text-green-600 mb-1">Sudah Dibayar</p>
@@ -190,15 +214,23 @@ const Billing = () => {
         onExport={() => console.log('Export billing')}
       />
 
-      <DataTable
-        columns={columns}
-        data={filteredData}
-        onView={handleView}
-        actionColumn={{ edit: false, delete: false, view: true }}
-        currentPage={currentPage}
-        totalPages={Math.ceil(filteredData.length / 10)}
-        onPageChange={setCurrentPage}
-      />
+      {billings.loading ? (
+        <div className="flex items-center justify-center py-20">
+          <FiLoader className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={billings.data}
+          onView={handleView}
+          actionColumn={{ edit: false, delete: false, view: true }}
+          currentPage={billings.pagination.page}
+          totalPages={billings.pagination.totalPages}
+          totalItems={billings.pagination.total}
+          itemsPerPage={itemsPerPage}
+          onPageChange={setCurrentPage}
+        />
+      )}
 
       {/* View Modal */}
       <Modal
@@ -212,59 +244,80 @@ const Billing = () => {
           <div className="space-y-4">
             <div className="flex items-center gap-3">
               <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                selectedItem.type === 'pln' ? 'bg-yellow-100' :
-                selectedItem.type === 'pdam' ? 'bg-blue-100' :
-                'bg-purple-100'
+                selectedItem.billing_type === 'pln' ? 'bg-yellow-100' : 'bg-blue-100'
               }`}>
                 <FiFileText className={`${
-                  selectedItem.type === 'pln' ? 'text-yellow-600' :
-                  selectedItem.type === 'pdam' ? 'text-blue-600' :
-                  'text-purple-600'
+                  selectedItem.billing_type === 'pln' ? 'text-yellow-600' : 'text-blue-600'
                 }`} size={24} />
               </div>
               <div>
-                <h3 className="font-semibold text-gray-800">{selectedItem.account}</h3>
-                <p className="text-sm text-gray-500">{selectedItem.campus}</p>
+                <h3 className="font-semibold text-gray-800">{selectedItem.account?.account_name || '-'}</h3>
+                <p className="text-sm text-gray-500">{selectedItem.campus?.campus_name || '-'}</p>
               </div>
             </div>
 
             <div className="flex justify-between py-2 border-b">
               <span className="text-gray-500">Periode</span>
-              <span className="font-medium">{selectedItem.period}</span>
+              <span className="font-medium">
+                {selectedItem.date
+                  ? new Date(selectedItem.date).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
+                  : '-'}
+              </span>
             </div>
             {selectedItem.meter_start && (
               <div className="flex justify-between py-2 border-b">
                 <span className="text-gray-500">Meter Awal</span>
-                <span className="font-medium">{selectedItem.meter_start.toLocaleString('id-ID')}</span>
+                <span className="font-medium">{parseInt(selectedItem.meter_start).toLocaleString('id-ID')}</span>
               </div>
             )}
             {selectedItem.meter_end && (
               <div className="flex justify-between py-2 border-b">
                 <span className="text-gray-500">Meter Akhir</span>
-                <span className="font-medium">{selectedItem.meter_end.toLocaleString('id-ID')}</span>
+                <span className="font-medium">{parseInt(selectedItem.meter_end).toLocaleString('id-ID')}</span>
               </div>
             )}
-            {selectedItem.usage && (
+            {selectedItem.meter_start && selectedItem.meter_end && (
               <div className="flex justify-between py-2 border-b">
                 <span className="text-gray-500">Pemakaian</span>
-                <span className="font-medium">{selectedItem.usage.toLocaleString('id-ID')} {selectedItem.type === 'pln' ? 'kWh' : 'm³'}</span>
+                <span className="font-medium">
+                  {(selectedItem.meter_end - selectedItem.meter_start).toLocaleString('id-ID')}{' '}
+                  {selectedItem.billing_type === 'pln' ? 'kWh' : 'm³'}
+                </span>
               </div>
             )}
             <div className="flex justify-between py-2 border-b">
               <span className="text-gray-500">Jumlah Tagihan</span>
-              <span className="font-bold text-lg">Rp {selectedItem.amount.toLocaleString('id-ID')}</span>
+              <span className="font-bold text-lg">
+                Rp {parseInt(selectedItem.total_billing || 0).toLocaleString('id-ID')}
+              </span>
             </div>
             <div className="flex justify-between py-2 border-b">
               <span className="text-gray-500">Jatuh Tempo</span>
-              <span className="font-medium">{new Date(selectedItem.due_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+              <span className="font-medium">
+                {selectedItem.due_date
+                  ? new Date(selectedItem.due_date).toLocaleDateString('id-ID', {
+                      day: 'numeric',
+                      month: 'long',
+                      year: 'numeric',
+                    })
+                  : '-'}
+              </span>
             </div>
             <div className="flex justify-between py-2 border-b">
               <span className="text-gray-500">Tanggal Bayar</span>
-              <span className="font-medium">{selectedItem.payment_date ? new Date(selectedItem.payment_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '-'}</span>
+              <span className="font-medium">
+                {selectedItem.payment_date
+                  ? new Date(selectedItem.payment_date).toLocaleDateString('id-ID', {
+                      day: 'numeric',
+                      month: 'long',
+                      year: 'numeric',
+                    })
+                  : '-'}
+              </span>
             </div>
             <div className="flex justify-between py-2 border-b">
               <span className="text-gray-500">Status</span>
-              <StatusBadge status={selectedItem.status} />
+              <StatusBadge status={selectedItem.status === 1 ? 'paid' : 'unpaid'} />
             </div>
             <div className="pt-4 flex justify-end gap-3">
               <button

@@ -1,4 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { toast } from 'react-hot-toast';
 import MainLayout from '../layouts/MainLayout';
 import {
   DataTable,
@@ -8,82 +10,113 @@ import {
   StatusBadge,
   ConfirmDialog,
   PageHeader,
+  AvatarWithFallback,
 } from '../components/ui';
-import { FiUser } from 'react-icons/fi';
+import { FiUser, FiLoader } from 'react-icons/fi';
+import {
+  fetchUsers,
+  createUser,
+  updateUser,
+  deleteUser,
+  clearUsersError,
+  clearUsersSuccess,
+} from '../store/usersSlice';
+import { fetchCampuses } from '../store/campusesSlice';
+import { fetchRoles, fetchShifts } from '../store/masterSlice';
 
 const Users = () => {
+  const dispatch = useDispatch();
+  const { data: users, pagination, loading, error, success } = useSelector((state) => state.users);
+  const { data: campuses } = useSelector((state) => state.campuses);
+  const { roles, shifts } = useSelector((state) => state.master);
+
   const [searchValue, setSearchValue] = useState('');
   const [filterValues, setFilterValues] = useState({});
   const [currentPage, setCurrentPage] = useState(1);
-  const [sortColumn, setSortColumn] = useState('name');
-  const [sortDirection, setSortDirection] = useState('asc');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [formLoading, setFormLoading] = useState(false);
   const [formData, setFormData] = useState({
-    name: '',
+    full_name: '',
     email: '',
     phone: '',
     role_id: '',
     shift_id: '',
     campus_id: '',
     password: '',
-    status: 'active',
+    position: '',
+    is_active: 1,
   });
 
   const itemsPerPage = 10;
 
-  // Dummy data
-  const roles = [
-    { value: '1', label: 'Super Admin' },
-    { value: '2', label: 'Admin' },
-    { value: '3', label: 'Supervisor' },
-    { value: '4', label: 'Staff' },
-    { value: '5', label: 'Security' },
-    { value: '6', label: 'Cleaning Service' },
-  ];
+  // Load data on mount and when filters change
+  const loadUsers = useCallback(() => {
+    const params = {
+      page: currentPage,
+      limit: itemsPerPage,
+      search: searchValue,
+      ...filterValues,
+    };
+    dispatch(fetchUsers(params));
+  }, [dispatch, currentPage, itemsPerPage, searchValue, filterValues]);
 
-  const shifts = [
-    { value: '1', label: 'Shift Pagi' },
-    { value: '2', label: 'Shift Siang' },
-    { value: '3', label: 'Shift Malam' },
-    { value: '4', label: 'Shift Office' },
-  ];
+  useEffect(() => {
+    loadUsers();
+  }, [loadUsers]);
 
-  const units = [
-    { value: '1', label: 'Unit A - Limau' },
-    { value: '2', label: 'Unit B - Ciracas' },
-    { value: '3', label: 'Unit C - Ciledug' },
-  ];
+  // Load master data
+  useEffect(() => {
+    dispatch(fetchCampuses({ limit: 100 }));
+    dispatch(fetchRoles({ limit: 100 }));
+    dispatch(fetchShifts({ limit: 100 }));
+  }, [dispatch]);
 
-  const allData = [
-    { id: 1, name: 'Ahmad Fauzi', email: 'ahmad.fauzi@uhamka.ac.id', phone: '08123456789', role: 'Super Admin', role_id: '1', shift: 'Shift Office', shift_id: '4', campus: 'Unit A', campus_id: '1', avatar: null, status: 'active' },
-    { id: 2, name: 'Budi Santoso', email: 'budi.santoso@uhamka.ac.id', phone: '08234567890', role: 'Admin', role_id: '2', shift: 'Shift Office', shift_id: '4', campus: 'Unit A', campus_id: '1', avatar: null, status: 'active' },
-    { id: 3, name: 'Citra Dewi', email: 'citra.dewi@uhamka.ac.id', phone: '08345678901', role: 'Supervisor', role_id: '3', shift: 'Shift Pagi', shift_id: '1', campus: 'Unit B', campus_id: '2', avatar: null, status: 'active' },
-    { id: 4, name: 'Dani Pratama', email: 'dani.pratama@uhamka.ac.id', phone: '08456789012', role: 'Staff', role_id: '4', shift: 'Shift Pagi', shift_id: '1', campus: 'Unit A', campus_id: '1', avatar: null, status: 'active' },
-    { id: 5, name: 'Eko Wijaya', email: 'eko.wijaya@uhamka.ac.id', phone: '08567890123', role: 'Security', role_id: '5', shift: 'Shift Malam', shift_id: '3', campus: 'Unit C', campus_id: '3', avatar: null, status: 'active' },
-    { id: 6, name: 'Fitri Rahayu', email: 'fitri.rahayu@uhamka.ac.id', phone: '08678901234', role: 'Cleaning Service', role_id: '6', shift: 'Shift Pagi', shift_id: '1', campus: 'Unit B', campus_id: '2', avatar: null, status: 'inactive' },
-    { id: 7, name: 'Gunawan Hidayat', email: 'gunawan.h@uhamka.ac.id', phone: '08789012345', role: 'Staff', role_id: '4', shift: 'Shift Siang', shift_id: '2', campus: 'Unit A', campus_id: '1', avatar: null, status: 'active' },
-    { id: 8, name: 'Hendra Kusuma', email: 'hendra.k@uhamka.ac.id', phone: '08890123456', role: 'Security', role_id: '5', shift: 'Shift Malam', shift_id: '3', campus: 'Unit A', campus_id: '1', avatar: null, status: 'active' },
-    { id: 9, name: 'Indah Permata', email: 'indah.p@uhamka.ac.id', phone: '08901234567', role: 'Cleaning Service', role_id: '6', shift: 'Shift Siang', shift_id: '2', campus: 'Unit C', campus_id: '3', avatar: null, status: 'active' },
-    { id: 10, name: 'Joko Widodo', email: 'joko.w@uhamka.ac.id', phone: '08012345678', role: 'Supervisor', role_id: '3', shift: 'Shift Pagi', shift_id: '1', campus: 'Unit A', campus_id: '1', avatar: null, status: 'active' },
-    { id: 11, name: 'Kartini Sari', email: 'kartini.s@uhamka.ac.id', phone: '08112233445', role: 'Staff', role_id: '4', shift: 'Shift Pagi', shift_id: '1', campus: 'Unit B', campus_id: '2', avatar: null, status: 'inactive' },
-    { id: 12, name: 'Lukman Hakim', email: 'lukman.h@uhamka.ac.id', phone: '08223344556', role: 'Admin', role_id: '2', shift: 'Shift Office', shift_id: '4', campus: 'Unit B', campus_id: '2', avatar: null, status: 'active' },
-  ];
+  // Handle success/error messages
+  useEffect(() => {
+    if (error) {
+      toast.error(error);
+      dispatch(clearUsersError());
+    }
+  }, [error, dispatch]);
+
+  useEffect(() => {
+    if (success) {
+      toast.success(success);
+      dispatch(clearUsersSuccess());
+      loadUsers();
+    }
+  }, [success, dispatch, loadUsers]);
+
+  // Reset page when search/filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchValue, filterValues]);
+
+  // Convert master data to options format
+  const roleOptions = roles.data.map((r) => ({
+    value: r.role_id?.toString(),
+    label: r.role_name,
+  }));
+
+  const shiftOptions = shifts.data.map((s) => ({
+    value: s.shift_id?.toString(),
+    label: s.shift_name,
+  }));
+
+  const campusOptions = campuses.map((c) => ({
+    value: c.campus_id?.toString(),
+    label: c.campus_name,
+  }));
 
   const columns = [
     {
-      key: 'name',
+      key: 'full_name',
       label: 'User',
       render: (value, item) => (
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-            {item.avatar ? (
-              <img src={item.avatar} alt={value} className="w-10 h-10 rounded-full object-cover" />
-            ) : (
-              <FiUser className="text-primary" size={18} />
-            )}
-          </div>
+          <AvatarWithFallback src={item.photo_1} alt={value} size={40} />
           <div>
             <p className="font-medium text-gray-800">{value}</p>
             <p className="text-xs text-gray-500">{item.email}</p>
@@ -96,19 +129,29 @@ const Users = () => {
       key: 'role',
       label: 'Role',
       width: '130px',
-      render: (value) => (
+      render: (value, item) => (
         <span className="px-2.5 py-1 bg-primary/10 text-primary text-xs font-medium rounded-full whitespace-nowrap">
-          {value}
+          {item.role?.role_name || '-'}
         </span>
       ),
     },
-    { key: 'shift', label: 'Shift', width: '120px' },
-    { key: 'campus', label: 'Unit', width: '130px' },
     {
-      key: 'status',
+      key: 'shift',
+      label: 'Shift',
+      width: '120px',
+      render: (value, item) => item.shift?.shift_name || '-',
+    },
+    {
+      key: 'campus',
+      label: 'Unit',
+      width: '130px',
+      render: (value, item) => item.campus?.campus_name || '-',
+    },
+    {
+      key: 'is_active',
       label: 'Status',
       width: '100px',
-      render: (value) => <StatusBadge status={value} />,
+      render: (value) => <StatusBadge status={value === 1 ? 'active' : 'inactive'} />,
     },
   ];
 
@@ -116,75 +159,39 @@ const Users = () => {
     {
       key: 'role_id',
       label: 'Role',
-      options: roles,
+      options: roleOptions,
     },
     {
       key: 'campus_id',
       label: 'Unit',
-      options: units,
+      options: campusOptions,
     },
     {
-      key: 'status',
+      key: 'is_active',
       label: 'Status',
       options: [
-        { value: 'active', label: 'Aktif' },
-        { value: 'inactive', label: 'Nonaktif' },
+        { value: '1', label: 'Aktif' },
+        { value: '0', label: 'Nonaktif' },
       ],
     },
   ];
-
-  // Filter, sort, and paginate data
-  const { paginatedData, totalItems, totalPages } = useMemo(() => {
-    let filtered = allData.filter((item) => {
-      const matchSearch =
-        item.name.toLowerCase().includes(searchValue.toLowerCase()) ||
-        item.email.toLowerCase().includes(searchValue.toLowerCase());
-      const matchRole = !filterValues.role_id || item.role_id === filterValues.role_id;
-      const matchCampus = !filterValues.campus_id || item.campus_id === filterValues.campus_id;
-      const matchStatus = !filterValues.status || item.status === filterValues.status;
-      return matchSearch && matchRole && matchCampus && matchStatus;
-    });
-
-    filtered.sort((a, b) => {
-      const aVal = a[sortColumn] || '';
-      const bVal = b[sortColumn] || '';
-      return sortDirection === 'asc'
-        ? aVal.toString().localeCompare(bVal.toString())
-        : bVal.toString().localeCompare(aVal.toString());
-    });
-
-    const total = filtered.length;
-    const pages = Math.ceil(total / itemsPerPage);
-    const start = (currentPage - 1) * itemsPerPage;
-    const paginated = filtered.slice(start, start + itemsPerPage);
-
-    return { paginatedData: paginated, totalItems: total, totalPages: pages };
-  }, [allData, searchValue, filterValues, sortColumn, sortDirection, currentPage]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchValue, filterValues]);
 
   const handleFilterChange = (key, value) => {
     setFilterValues((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleSort = (column, direction) => {
-    setSortColumn(column);
-    setSortDirection(direction);
-  };
-
   const handleAdd = () => {
     setSelectedItem(null);
     setFormData({
-      name: '',
+      full_name: '',
       email: '',
       phone: '',
       role_id: '',
       shift_id: '',
       campus_id: '',
       password: '',
-      status: 'active',
+      position: '',
+      is_active: 1,
     });
     setIsModalOpen(true);
   };
@@ -192,14 +199,15 @@ const Users = () => {
   const handleEdit = (item) => {
     setSelectedItem(item);
     setFormData({
-      name: item.name,
-      email: item.email,
-      phone: item.phone,
-      role_id: item.role_id,
-      shift_id: item.shift_id,
-      campus_id: item.campus_id,
+      full_name: item.full_name || '',
+      email: item.email || '',
+      phone: item.phone || '',
+      role_id: item.role_id?.toString() || '',
+      shift_id: item.shift_id?.toString() || '',
+      campus_id: item.campus_id?.toString() || '',
       password: '',
-      status: item.status,
+      position: item.position || '',
+      is_active: item.is_active,
     });
     setIsModalOpen(true);
   };
@@ -209,14 +217,41 @@ const Users = () => {
     setIsDeleteOpen(true);
   };
 
-  const handleSubmit = () => {
-    console.log('Form submitted:', formData);
-    setIsModalOpen(false);
+  const handleSubmit = async () => {
+    setFormLoading(true);
+    try {
+      const submitData = { ...formData };
+
+      // Convert to numbers
+      if (submitData.role_id) submitData.role_id = parseInt(submitData.role_id);
+      if (submitData.shift_id) submitData.shift_id = parseInt(submitData.shift_id);
+      if (submitData.campus_id) submitData.campus_id = parseInt(submitData.campus_id);
+
+      // Remove password if empty on update
+      if (selectedItem && !submitData.password) {
+        delete submitData.password;
+      }
+
+      if (selectedItem) {
+        await dispatch(updateUser({ id: selectedItem.user_id, data: submitData })).unwrap();
+      } else {
+        await dispatch(createUser(submitData)).unwrap();
+      }
+      setIsModalOpen(false);
+    } catch (err) {
+      // Error handled by slice
+    } finally {
+      setFormLoading(false);
+    }
   };
 
-  const handleConfirmDelete = () => {
-    console.log('Deleted:', selectedItem);
-    setIsDeleteOpen(false);
+  const handleConfirmDelete = async () => {
+    try {
+      await dispatch(deleteUser(selectedItem.user_id)).unwrap();
+      setIsDeleteOpen(false);
+    } catch (err) {
+      // Error handled by slice
+    }
   };
 
   const handleInputChange = (e) => {
@@ -249,20 +284,23 @@ const Users = () => {
         onExport={() => console.log('Export users')}
       />
 
-      <DataTable
-        columns={columns}
-        data={paginatedData}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-        currentPage={currentPage}
-        totalPages={totalPages}
-        totalItems={totalItems}
-        itemsPerPage={itemsPerPage}
-        onPageChange={setCurrentPage}
-        onSort={handleSort}
-        sortColumn={sortColumn}
-        sortDirection={sortDirection}
-      />
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <FiLoader className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={users}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+          currentPage={pagination.page}
+          totalPages={pagination.totalPages}
+          totalItems={pagination.total}
+          itemsPerPage={itemsPerPage}
+          onPageChange={setCurrentPage}
+        />
+      )}
 
       {/* Add/Edit Modal */}
       <Modal
@@ -271,12 +309,13 @@ const Users = () => {
         title={selectedItem ? 'Edit User' : 'Tambah User'}
         onSubmit={handleSubmit}
         size="lg"
+        loading={formLoading}
       >
         <div className="grid grid-cols-2 gap-4">
           <FormInput
             label="Nama Lengkap"
-            name="name"
-            value={formData.name}
+            name="full_name"
+            value={formData.full_name}
             onChange={handleInputChange}
             placeholder="Masukkan nama lengkap"
             required
@@ -310,6 +349,13 @@ const Users = () => {
             helperText={selectedItem ? 'Kosongkan jika tidak ingin mengubah password' : ''}
           />
         </div>
+        <FormInput
+          label="Jabatan/Posisi"
+          name="position"
+          value={formData.position}
+          onChange={handleInputChange}
+          placeholder="Masukkan jabatan/posisi"
+        />
         <div className="grid grid-cols-3 gap-4">
           <FormInput
             label="Role"
@@ -317,7 +363,7 @@ const Users = () => {
             type="select"
             value={formData.role_id}
             onChange={handleInputChange}
-            options={roles}
+            options={roleOptions}
             required
           />
           <FormInput
@@ -326,8 +372,7 @@ const Users = () => {
             type="select"
             value={formData.shift_id}
             onChange={handleInputChange}
-            options={shifts}
-            required
+            options={shiftOptions}
           />
           <FormInput
             label="Unit"
@@ -335,19 +380,18 @@ const Users = () => {
             type="select"
             value={formData.campus_id}
             onChange={handleInputChange}
-            options={units}
-            required
+            options={campusOptions}
           />
         </div>
         <FormInput
           label="Status"
-          name="status"
+          name="is_active"
           type="select"
-          value={formData.status}
-          onChange={handleInputChange}
+          value={formData.is_active?.toString()}
+          onChange={(e) => setFormData(prev => ({ ...prev, is_active: parseInt(e.target.value) }))}
           options={[
-            { value: 'active', label: 'Aktif' },
-            { value: 'inactive', label: 'Nonaktif' },
+            { value: '1', label: 'Aktif' },
+            { value: '0', label: 'Nonaktif' },
           ]}
         />
       </Modal>
@@ -358,9 +402,10 @@ const Users = () => {
         onClose={() => setIsDeleteOpen(false)}
         onConfirm={handleConfirmDelete}
         title="Hapus User"
-        message={`Apakah Anda yakin ingin menghapus user "${selectedItem?.name}"? Semua data terkait user ini akan ikut terhapus.`}
+        message={`Apakah Anda yakin ingin menghapus user "${selectedItem?.full_name}"? Semua data terkait user ini akan ikut terhapus.`}
         confirmText="Ya, Hapus"
         type="danger"
+        loading={loading}
       />
     </MainLayout>
   );

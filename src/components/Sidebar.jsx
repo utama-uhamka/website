@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   FiHome, FiLogOut, FiDatabase, FiChevronDown, FiChevronRight, FiMap,
   FiTag, FiShield, FiClock, FiFolder, FiAlertCircle, FiPackage,
-  FiUserCheck, FiCalendar, FiUsers
+  FiUserCheck, FiCalendar, FiUsers, FiBell
 } from 'react-icons/fi';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
@@ -48,6 +48,7 @@ const Sidebar = () => {
         { icon: FiCalendar, label: 'Cuti', path: '/leaves' },
       ],
     },
+    { icon: FiBell, label: 'Push Notification', path: '/push-notification' },
   ];
 
   // Helper function to check if path matches (including detail pages)

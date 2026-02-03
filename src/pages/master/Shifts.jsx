@@ -1,4 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { toast } from 'react-hot-toast';
 import MainLayout from '../../layouts/MainLayout';
 import {
   DataTable,
@@ -9,132 +11,146 @@ import {
   ConfirmDialog,
   PageHeader,
 } from '../../components/ui';
+import { FiLoader } from 'react-icons/fi';
+import {
+  fetchShifts,
+  createShift,
+  updateShift,
+  deleteShift,
+  clearMasterError,
+  clearMasterSuccess,
+} from '../../store/masterSlice';
 
 const Shifts = () => {
+  const dispatch = useDispatch();
+  const { shifts, loading, error, success } = useSelector((state) => state.master);
+
   const [searchValue, setSearchValue] = useState('');
   const [filterValues, setFilterValues] = useState({});
   const [currentPage, setCurrentPage] = useState(1);
-  const [sortColumn, setSortColumn] = useState('start_time');
-  const [sortDirection, setSortDirection] = useState('asc');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [formLoading, setFormLoading] = useState(false);
   const [formData, setFormData] = useState({
-    name: '',
+    shift_name: '',
     start_time: '',
     end_time: '',
     break_duration: '',
     description: '',
-    status: 'active',
+    is_active: 1,
   });
 
   const itemsPerPage = 10;
 
-  // Dummy data
-  const allData = [
-    { id: 1, name: 'Shift Pagi', start_time: '07:00', end_time: '15:00', break_duration: 60, description: 'Shift pagi reguler', user_count: 25, status: 'active' },
-    { id: 2, name: 'Shift Siang', start_time: '14:00', end_time: '22:00', break_duration: 60, description: 'Shift siang reguler', user_count: 18, status: 'active' },
-    { id: 3, name: 'Shift Malam', start_time: '22:00', end_time: '07:00', break_duration: 60, description: 'Shift malam untuk security', user_count: 8, status: 'active' },
-    { id: 4, name: 'Shift Office', start_time: '08:00', end_time: '17:00', break_duration: 60, description: 'Jam kerja kantor standar', user_count: 40, status: 'active' },
-    { id: 5, name: 'Shift Fleksibel', start_time: '09:00', end_time: '18:00', break_duration: 60, description: 'Jam kerja fleksibel', user_count: 15, status: 'active' },
-    { id: 6, name: 'Shift Weekend', start_time: '08:00', end_time: '14:00', break_duration: 30, description: 'Shift akhir pekan', user_count: 5, status: 'inactive' },
-  ];
+  // Load shifts
+  const loadShifts = useCallback(() => {
+    const params = {
+      page: currentPage,
+      limit: itemsPerPage,
+      search: searchValue,
+      ...filterValues,
+    };
+    dispatch(fetchShifts(params));
+  }, [dispatch, currentPage, itemsPerPage, searchValue, filterValues]);
+
+  useEffect(() => {
+    loadShifts();
+  }, [loadShifts]);
+
+  // Handle errors
+  useEffect(() => {
+    if (error) {
+      toast.error(error);
+      dispatch(clearMasterError());
+    }
+  }, [error, dispatch]);
+
+  // Handle success
+  useEffect(() => {
+    if (success) {
+      toast.success(success);
+      dispatch(clearMasterSuccess());
+      loadShifts();
+    }
+  }, [success, dispatch, loadShifts]);
+
+  // Reset page when search/filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchValue, filterValues]);
 
   const columns = [
-    { key: 'name', label: 'Nama Shift' },
+    { key: 'shift_name', label: 'Nama Shift' },
     {
       key: 'start_time',
       label: 'Jam Mulai',
       width: '100px',
-      render: (value) => <span className="font-medium">{value}</span>,
+      render: (value) => <span className="font-medium">{value || '-'}</span>,
     },
     {
       key: 'end_time',
       label: 'Jam Selesai',
       width: '100px',
-      render: (value) => <span className="font-medium">{value}</span>,
+      render: (value) => <span className="font-medium">{value || '-'}</span>,
     },
     {
       key: 'break_duration',
       label: 'Istirahat',
       width: '100px',
-      render: (value) => `${value} menit`,
+      render: (value) => value ? `${value} menit` : '-',
     },
-    { key: 'user_count', label: 'Jumlah User', width: '120px' },
     {
-      key: 'status',
+      key: 'user_count',
+      label: 'Jumlah User',
+      width: '120px',
+      render: (value) => value || 0,
+    },
+    {
+      key: 'is_active',
       label: 'Status',
       width: '100px',
-      render: (value) => <StatusBadge status={value} />,
+      render: (value) => <StatusBadge status={value === 1 ? 'active' : 'inactive'} />,
     },
   ];
 
   const filters = [
     {
-      key: 'status',
+      key: 'is_active',
       label: 'Status',
       options: [
-        { value: 'active', label: 'Aktif' },
-        { value: 'inactive', label: 'Nonaktif' },
+        { value: '1', label: 'Aktif' },
+        { value: '0', label: 'Nonaktif' },
       ],
     },
   ];
-
-  // Filter, sort, and paginate data
-  const { paginatedData, totalItems, totalPages } = useMemo(() => {
-    let filtered = allData.filter((item) => {
-      const matchSearch = item.name.toLowerCase().includes(searchValue.toLowerCase());
-      const matchStatus = !filterValues.status || item.status === filterValues.status;
-      return matchSearch && matchStatus;
-    });
-
-    filtered.sort((a, b) => {
-      const aVal = a[sortColumn] || '';
-      const bVal = b[sortColumn] || '';
-      if (typeof aVal === 'number' && typeof bVal === 'number') {
-        return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
-      }
-      return sortDirection === 'asc'
-        ? aVal.toString().localeCompare(bVal.toString())
-        : bVal.toString().localeCompare(aVal.toString());
-    });
-
-    const total = filtered.length;
-    const pages = Math.ceil(total / itemsPerPage);
-    const start = (currentPage - 1) * itemsPerPage;
-    const paginated = filtered.slice(start, start + itemsPerPage);
-
-    return { paginatedData: paginated, totalItems: total, totalPages: pages };
-  }, [allData, searchValue, filterValues, sortColumn, sortDirection, currentPage]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchValue, filterValues]);
 
   const handleFilterChange = (key, value) => {
     setFilterValues((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleSort = (column, direction) => {
-    setSortColumn(column);
-    setSortDirection(direction);
-  };
-
   const handleAdd = () => {
     setSelectedItem(null);
-    setFormData({ name: '', start_time: '', end_time: '', break_duration: '', description: '', status: 'active' });
+    setFormData({
+      shift_name: '',
+      start_time: '',
+      end_time: '',
+      break_duration: '',
+      description: '',
+      is_active: 1,
+    });
     setIsModalOpen(true);
   };
 
   const handleEdit = (item) => {
     setSelectedItem(item);
     setFormData({
-      name: item.name,
-      start_time: item.start_time,
-      end_time: item.end_time,
-      break_duration: item.break_duration,
-      description: item.description,
-      status: item.status,
+      shift_name: item.shift_name || '',
+      start_time: item.start_time || '',
+      end_time: item.end_time || '',
+      break_duration: item.break_duration?.toString() || '',
+      description: item.description || '',
+      is_active: item.is_active,
     });
     setIsModalOpen(true);
   };
@@ -144,14 +160,35 @@ const Shifts = () => {
     setIsDeleteOpen(true);
   };
 
-  const handleSubmit = () => {
-    console.log('Form submitted:', formData);
-    setIsModalOpen(false);
+  const handleSubmit = async () => {
+    setFormLoading(true);
+    try {
+      const submitData = {
+        ...formData,
+        break_duration: formData.break_duration ? parseInt(formData.break_duration) : null,
+        is_active: parseInt(formData.is_active),
+      };
+
+      if (selectedItem) {
+        await dispatch(updateShift({ id: selectedItem.shift_id, data: submitData })).unwrap();
+      } else {
+        await dispatch(createShift(submitData)).unwrap();
+      }
+      setIsModalOpen(false);
+    } catch (err) {
+      // Error handled by slice
+    } finally {
+      setFormLoading(false);
+    }
   };
 
-  const handleConfirmDelete = () => {
-    console.log('Deleted:', selectedItem);
-    setIsDeleteOpen(false);
+  const handleConfirmDelete = async () => {
+    try {
+      await dispatch(deleteShift(selectedItem.shift_id)).unwrap();
+      setIsDeleteOpen(false);
+    } catch (err) {
+      // Error handled by slice
+    }
   };
 
   const handleInputChange = (e) => {
@@ -182,20 +219,23 @@ const Shifts = () => {
         addLabel="Tambah Shift"
       />
 
-      <DataTable
-        columns={columns}
-        data={paginatedData}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-        currentPage={currentPage}
-        totalPages={totalPages}
-        totalItems={totalItems}
-        itemsPerPage={itemsPerPage}
-        onPageChange={setCurrentPage}
-        onSort={handleSort}
-        sortColumn={sortColumn}
-        sortDirection={sortDirection}
-      />
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <FiLoader className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={shifts.data}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+          currentPage={shifts.pagination.page}
+          totalPages={shifts.pagination.totalPages}
+          totalItems={shifts.pagination.total}
+          itemsPerPage={itemsPerPage}
+          onPageChange={setCurrentPage}
+        />
+      )}
 
       {/* Add/Edit Modal */}
       <Modal
@@ -203,11 +243,12 @@ const Shifts = () => {
         onClose={() => setIsModalOpen(false)}
         title={selectedItem ? 'Edit Shift' : 'Tambah Shift'}
         onSubmit={handleSubmit}
+        loading={formLoading}
       >
         <FormInput
           label="Nama Shift"
-          name="name"
-          value={formData.name}
+          name="shift_name"
+          value={formData.shift_name}
           onChange={handleInputChange}
           placeholder="Contoh: Shift Pagi"
           required
@@ -248,13 +289,13 @@ const Shifts = () => {
         />
         <FormInput
           label="Status"
-          name="status"
+          name="is_active"
           type="select"
-          value={formData.status}
-          onChange={handleInputChange}
+          value={formData.is_active?.toString()}
+          onChange={(e) => setFormData((prev) => ({ ...prev, is_active: parseInt(e.target.value) }))}
           options={[
-            { value: 'active', label: 'Aktif' },
-            { value: 'inactive', label: 'Nonaktif' },
+            { value: '1', label: 'Aktif' },
+            { value: '0', label: 'Nonaktif' },
           ]}
         />
       </Modal>
@@ -265,9 +306,10 @@ const Shifts = () => {
         onClose={() => setIsDeleteOpen(false)}
         onConfirm={handleConfirmDelete}
         title="Hapus Shift"
-        message={`Apakah Anda yakin ingin menghapus "${selectedItem?.name}"? User yang terdaftar di shift ini akan perlu dipindahkan.`}
+        message={`Apakah Anda yakin ingin menghapus "${selectedItem?.shift_name}"? User yang terdaftar di shift ini akan perlu dipindahkan.`}
         confirmText="Ya, Hapus"
         type="danger"
+        loading={loading}
       />
     </MainLayout>
   );

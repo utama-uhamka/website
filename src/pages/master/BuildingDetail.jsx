@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
+import { toast } from 'react-hot-toast';
 import MainLayout from '../../layouts/MainLayout';
 import {
   DataTable,
   Modal,
   FormInput,
-  StatusBadge,
   PageHeader,
   Tabs,
   ConfirmDialog,
@@ -20,96 +21,186 @@ import {
   FiHome,
   FiCheckCircle,
   FiXCircle,
+  FiLoader,
 } from 'react-icons/fi';
+import {
+  fetchBuildingById,
+  fetchFloors,
+  createFloor,
+  updateFloor,
+  deleteFloor,
+  clearMasterError,
+  clearMasterSuccess,
+} from '../../store/masterSlice';
+import {
+  fetchItems,
+  createItem,
+  updateItem,
+  deleteItem,
+  clearDataError,
+  clearDataSuccess,
+} from '../../store/dataSlice';
+import { fetchCategoryItems } from '../../store/masterSlice';
 
 const BuildingDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const dispatch = useDispatch();
   const [activeTab, setActiveTab] = useState('lantai');
 
-  // Dummy building data
-  const buildingData = {
-    id: parseInt(id),
-    name: 'Gedung Rektorat',
-    unit: 'Unit A - Limau',
-    unit_id: 1,
-    floors_count: 5,
-    description: 'Gedung pusat administrasi universitas',
-    status: 'active',
-  };
+  // Redux state
+  const { floors, categoryItems, loading: masterLoading, error: masterError, success: masterSuccess } = useSelector((state) => state.master);
+  const { items, loading: dataLoading, error: dataError, success: dataSuccess } = useSelector((state) => state.data);
+
+  // Local state for building detail
+  const [buildingData, setBuildingData] = useState(null);
+  const [buildingLoading, setBuildingLoading] = useState(true);
+
+  // Pagination states
+  const [floorPage, setFloorPage] = useState(1);
+  const [itemPage, setItemPage] = useState(1);
+  const itemsPerPage = 10;
 
   // Floor CRUD states
-  const [floorsData, setFloorsData] = useState([
-    { id: 1, name: 'Lantai 1', code: 'L1', rooms_count: 10, description: 'Lobby dan ruang tamu', status: 'active' },
-    { id: 2, name: 'Lantai 2', code: 'L2', rooms_count: 8, description: 'Ruang administrasi', status: 'active' },
-    { id: 3, name: 'Lantai 3', code: 'L3', rooms_count: 8, description: 'Ruang dekanat', status: 'active' },
-    { id: 4, name: 'Lantai 4', code: 'L4', rooms_count: 6, description: 'Ruang rapat', status: 'active' },
-    { id: 5, name: 'Lantai 5', code: 'L5', rooms_count: 4, description: 'Ruang pimpinan', status: 'active' },
-  ]);
   const [isFloorModalOpen, setIsFloorModalOpen] = useState(false);
   const [isFloorDeleteOpen, setIsFloorDeleteOpen] = useState(false);
   const [selectedFloor, setSelectedFloor] = useState(null);
-  const [floorForm, setFloorForm] = useState({ name: '', code: '', description: '', status: 'active' });
+  const [floorForm, setFloorForm] = useState({ floor_name: '' });
+  const [floorFormLoading, setFloorFormLoading] = useState(false);
 
   // Item CRUD states
-  const [itemsData, setItemsData] = useState([
-    { id: 1, name: 'AC Split 2PK', code: 'AC-001', category: 'Elektronik', quantity: 25, condition: 'Baik', location: 'Lantai 1-5' },
-    { id: 2, name: 'Meja Kerja', code: 'MJ-001', category: 'Furniture', quantity: 50, condition: 'Baik', location: 'Lantai 1-5' },
-    { id: 3, name: 'Kursi Kantor', code: 'KR-001', category: 'Furniture', quantity: 60, condition: 'Baik', location: 'Lantai 1-5' },
-    { id: 4, name: 'Proyektor', code: 'PR-001', category: 'Elektronik', quantity: 5, condition: 'Baik', location: 'Lantai 4' },
-    { id: 5, name: 'Printer', code: 'PT-001', category: 'Elektronik', quantity: 10, condition: 'Cukup', location: 'Lantai 1-3' },
-    { id: 6, name: 'Lemari Arsip', code: 'LA-001', category: 'Furniture', quantity: 20, condition: 'Baik', location: 'Lantai 2' },
-  ]);
   const [isItemModalOpen, setIsItemModalOpen] = useState(false);
   const [isItemDeleteOpen, setIsItemDeleteOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
-  const [itemForm, setItemForm] = useState({ name: '', code: '', category: '', quantity: '', condition: 'Baik', location: '' });
-
-  const categories = [
-    { value: 'Elektronik', label: 'Elektronik' },
-    { value: 'Furniture', label: 'Furniture' },
-    { value: 'Alat Tulis', label: 'Alat Tulis' },
-    { value: 'Lainnya', label: 'Lainnya' },
-  ];
+  const [itemForm, setItemForm] = useState({
+    item_name: '',
+    item_code: '',
+    item_description: '',
+    category_item_id: '',
+    item_condition: 'Baik',
+    total: '',
+    brand: '',
+  });
+  const [itemFormLoading, setItemFormLoading] = useState(false);
 
   const conditions = [
     { value: 'Baik', label: 'Baik' },
-    { value: 'Cukup', label: 'Cukup' },
+    { value: 'Menunggu Diperbaiki', label: 'Menunggu Diperbaiki' },
+    { value: 'Diperbaiki', label: 'Diperbaiki' },
     { value: 'Rusak', label: 'Rusak' },
   ];
 
+  // Load building detail
+  const loadBuildingDetail = useCallback(async () => {
+    setBuildingLoading(true);
+    try {
+      const result = await dispatch(fetchBuildingById(id)).unwrap();
+      setBuildingData(result.data);
+    } catch (err) {
+      toast.error(err || 'Gagal memuat detail gedung');
+      navigate('/master/units');
+    } finally {
+      setBuildingLoading(false);
+    }
+  }, [dispatch, id, navigate]);
+
+  // Load floors for this building
+  const loadFloors = useCallback((page = floorPage) => {
+    dispatch(fetchFloors({ building_id: id, page, limit: itemsPerPage }));
+  }, [dispatch, id, floorPage, itemsPerPage]);
+
+  // Load items for this building (filtered by building_id only)
+  const loadItems = useCallback((page = itemPage) => {
+    if (buildingData) {
+      dispatch(fetchItems({
+        campus_id: buildingData.campus_id,
+        building_id: id,
+        page,
+        limit: itemsPerPage
+      }));
+    }
+  }, [dispatch, id, buildingData, itemPage, itemsPerPage]);
+
+  // Load category items for dropdown
+  const loadCategoryItems = useCallback(() => {
+    dispatch(fetchCategoryItems({ limit: 100 }));
+  }, [dispatch]);
+
+  // Initial load
+  useEffect(() => {
+    loadBuildingDetail();
+    loadFloors();
+    loadCategoryItems();
+  }, [loadBuildingDetail, loadFloors, loadCategoryItems]);
+
+  // Load items after building data is loaded
+  useEffect(() => {
+    if (buildingData) {
+      loadItems();
+    }
+  }, [buildingData, loadItems]);
+
+  // Handle master errors and success
+  useEffect(() => {
+    if (masterError) {
+      toast.error(masterError);
+      dispatch(clearMasterError());
+    }
+    if (masterSuccess) {
+      toast.success(masterSuccess);
+      dispatch(clearMasterSuccess());
+    }
+  }, [masterError, masterSuccess, dispatch]);
+
+  // Handle data errors and success
+  useEffect(() => {
+    if (dataError) {
+      toast.error(dataError);
+      dispatch(clearDataError());
+    }
+    if (dataSuccess) {
+      toast.success(dataSuccess);
+      dispatch(clearDataSuccess());
+    }
+  }, [dataError, dataSuccess, dispatch]);
+
   // Column definitions
   const floorColumns = [
-    { key: 'code', label: 'Kode', width: '80px' },
-    { key: 'name', label: 'Nama Lantai' },
-    { key: 'rooms_count', label: 'Jumlah Ruangan', width: '140px' },
-    { key: 'description', label: 'Deskripsi' },
-    { key: 'status', label: 'Status', width: '100px', render: (v) => <StatusBadge status={v} /> },
+    { key: 'floor_id', label: 'ID', width: '100px' },
+    { key: 'floor_name', label: 'Nama Lantai' },
+    { key: 'rooms_count', label: 'Jumlah Ruangan', width: '140px', render: (v) => v || 0 },
   ];
 
   const itemColumns = [
-    { key: 'code', label: 'Kode', width: '100px' },
-    { key: 'name', label: 'Nama Item' },
-    { key: 'category', label: 'Kategori', width: '120px' },
-    { key: 'quantity', label: 'Jumlah', width: '80px' },
-    { key: 'condition', label: 'Kondisi', width: '100px' },
-    { key: 'location', label: 'Lokasi', width: '120px' },
+    { key: 'item_code', label: 'Kode', width: '120px' },
+    { key: 'item_name', label: 'Nama Item' },
+    { key: 'category_item', label: 'Kategori', width: '120px', render: (v, row) => row.category_item?.category_item_name || '-' },
+    { key: 'total', label: 'Jumlah', width: '80px' },
+    { key: 'item_condition', label: 'Kondisi', width: '120px', render: (v) => (
+      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+        v === 'Baik' ? 'bg-green-100 text-green-700' :
+        v === 'Diperbaiki' ? 'bg-blue-100 text-blue-700' :
+        v === 'Menunggu Diperbaiki' ? 'bg-yellow-100 text-yellow-700' :
+        v === 'Rusak' ? 'bg-red-100 text-red-700' :
+        'bg-gray-100 text-gray-700'
+      }`}>
+        {v || '-'}
+      </span>
+    )},
+    { key: 'brand', label: 'Merk', width: '100px', render: (v) => v || '-' },
   ];
 
   // Floor handlers
   const handleAddFloor = () => {
     setSelectedFloor(null);
-    setFloorForm({ name: '', code: '', description: '', status: 'active' });
+    setFloorForm({ floor_name: '' });
     setIsFloorModalOpen(true);
   };
 
   const handleEditFloor = (item) => {
     setSelectedFloor(item);
     setFloorForm({
-      name: item.name,
-      code: item.code,
-      description: item.description,
-      status: item.status,
+      floor_name: item.floor_name || '',
     });
     setIsFloorModalOpen(true);
   };
@@ -119,38 +210,62 @@ const BuildingDetail = () => {
     setIsFloorDeleteOpen(true);
   };
 
-  const handleFloorSubmit = () => {
-    if (selectedFloor) {
-      setFloorsData((prev) =>
-        prev.map((item) => (item.id === selectedFloor.id ? { ...item, ...floorForm, rooms_count: item.rooms_count } : item))
-      );
-    } else {
-      setFloorsData((prev) => [...prev, { id: Date.now(), ...floorForm, rooms_count: 0 }]);
+  const handleFloorSubmit = async () => {
+    setFloorFormLoading(true);
+    try {
+      const submitData = {
+        floor_name: floorForm.floor_name,
+        building_id: id,
+      };
+      if (selectedFloor) {
+        await dispatch(updateFloor({ id: selectedFloor.floor_id, data: submitData })).unwrap();
+      } else {
+        await dispatch(createFloor(submitData)).unwrap();
+      }
+      setIsFloorModalOpen(false);
+      loadFloors();
+    } catch (err) {
+      // Error handled by effect
+    } finally {
+      setFloorFormLoading(false);
     }
-    setIsFloorModalOpen(false);
   };
 
-  const handleConfirmDeleteFloor = () => {
-    setFloorsData((prev) => prev.filter((item) => item.id !== selectedFloor.id));
-    setIsFloorDeleteOpen(false);
+  const handleConfirmDeleteFloor = async () => {
+    try {
+      await dispatch(deleteFloor(selectedFloor.floor_id)).unwrap();
+      setIsFloorDeleteOpen(false);
+      loadFloors();
+    } catch (err) {
+      // Error handled by effect
+    }
   };
 
   // Item handlers
   const handleAddItem = () => {
     setSelectedItem(null);
-    setItemForm({ name: '', code: '', category: '', quantity: '', condition: 'Baik', location: '' });
+    setItemForm({
+      item_name: '',
+      item_code: '',
+      item_description: '',
+      category_item_id: '',
+      item_condition: 'Baik',
+      total: '',
+      brand: '',
+    });
     setIsItemModalOpen(true);
   };
 
   const handleEditItem = (item) => {
     setSelectedItem(item);
     setItemForm({
-      name: item.name,
-      code: item.code,
-      category: item.category,
-      quantity: item.quantity,
-      condition: item.condition,
-      location: item.location,
+      item_name: item.item_name || '',
+      item_code: item.item_code || '',
+      item_description: item.item_description || '',
+      category_item_id: item.category_item_id || '',
+      item_condition: item.item_condition || 'Baik',
+      total: item.total || '',
+      brand: item.brand || '',
     });
     setIsItemModalOpen(true);
   };
@@ -160,36 +275,104 @@ const BuildingDetail = () => {
     setIsItemDeleteOpen(true);
   };
 
-  const handleItemSubmit = () => {
-    if (selectedItem) {
-      setItemsData((prev) =>
-        prev.map((item) => (item.id === selectedItem.id ? { ...item, ...itemForm } : item))
-      );
-    } else {
-      setItemsData((prev) => [...prev, { id: Date.now(), ...itemForm }]);
+  const handleItemSubmit = async () => {
+    setItemFormLoading(true);
+    try {
+      const itemData = {
+        item_name: itemForm.item_name,
+        item_code: itemForm.item_code,
+        item_description: itemForm.item_description,
+        category_item_id: itemForm.category_item_id || null,
+        item_condition: itemForm.item_condition,
+        total: itemForm.total ? parseInt(itemForm.total) : null,
+        brand: itemForm.brand,
+        campus_id: buildingData.campus_id,
+        building_id: id,
+      };
+      if (selectedItem) {
+        await dispatch(updateItem({ id: selectedItem.item_id, data: itemData })).unwrap();
+      } else {
+        await dispatch(createItem(itemData)).unwrap();
+      }
+      setIsItemModalOpen(false);
+      loadItems();
+    } catch (err) {
+      // Error handled by effect
+    } finally {
+      setItemFormLoading(false);
     }
-    setIsItemModalOpen(false);
   };
 
-  const handleConfirmDeleteItem = () => {
-    setItemsData((prev) => prev.filter((item) => item.id !== selectedItem.id));
-    setIsItemDeleteOpen(false);
+  const handleConfirmDeleteItem = async () => {
+    try {
+      await dispatch(deleteItem(selectedItem.item_id)).unwrap();
+      setIsItemDeleteOpen(false);
+      loadItems();
+    } catch (err) {
+      // Error handled by effect
+    }
   };
+
+  // Calculate stats and pagination
+  const floorsData = floors.data || [];
+  const floorsPagination = floors.pagination || { total: 0, page: 1, limit: 10, totalPages: 0 };
+  const itemsData = items.data || [];
+  const itemsPagination = items.pagination || { total: 0, page: 1, limit: 10, totalPages: 0 };
+  const totalRooms = floorsData.reduce((acc, f) => acc + (f.rooms_count || 0), 0);
+  const goodConditionItems = itemsData.filter(i => i.item_condition === 'Baik').length;
+  const needAttentionItems = itemsData.filter(i => i.item_condition && i.item_condition !== 'Baik').length;
+
+  // Handle page changes
+  const handleFloorPageChange = (newPage) => {
+    setFloorPage(newPage);
+    loadFloors(newPage);
+  };
+
+  const handleItemPageChange = (newPage) => {
+    setItemPage(newPage);
+    loadItems(newPage);
+  };
+
+  // Category options for dropdown
+  const categoryOptions = (categoryItems.data || []).map(c => ({
+    value: c.category_item_id,
+    label: c.category_item_name
+  }));
+
+  if (buildingLoading) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center min-h-96">
+          <FiLoader className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </MainLayout>
+    );
+  }
+
+  if (!buildingData) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center min-h-96">
+          <p className="text-gray-500">Gedung tidak ditemukan</p>
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout>
       <PageHeader
-        title={buildingData.name}
+        title={buildingData.building_name}
         subtitle="Detail informasi gedung"
         breadcrumbs={[
           { label: 'Dashboard', path: '/dashboard' },
           { label: 'Unit', path: '/master/units' },
-          { label: buildingData.unit, path: `/master/units/${buildingData.unit_id}` },
-          { label: buildingData.name },
+          { label: buildingData.campus_name || 'Unit', path: `/master/units/${buildingData.campus_id}` },
+          { label: buildingData.building_name },
         ]}
         actions={
           <button
-            onClick={() => navigate(`/master/units/${buildingData.unit_id}`)}
+            onClick={() => navigate(`/master/units/${buildingData.campus_id}`)}
             className="flex items-center gap-2 px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
           >
             <FiArrowLeft className="w-4 h-4" />
@@ -212,10 +395,8 @@ const BuildingDetail = () => {
           <div className="flex-1">
             <div className="flex items-start justify-between mb-4">
               <div>
-                <h2 className="text-2xl font-bold text-gray-800">{buildingData.name}</h2>
-                <p className="text-gray-500">{buildingData.description}</p>
+                <h2 className="text-2xl font-bold text-gray-800">{buildingData.building_name}</h2>
               </div>
-              <StatusBadge status={buildingData.status} />
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -225,7 +406,7 @@ const BuildingDetail = () => {
                 </div>
                 <div className="min-w-0">
                   <span className="text-xs text-gray-500">Unit</span>
-                  <p className="font-medium text-sm truncate">{buildingData.unit}</p>
+                  <p className="font-medium text-sm truncate">{buildingData.campus_name}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-100">
@@ -243,7 +424,7 @@ const BuildingDetail = () => {
                 </div>
                 <div className="min-w-0">
                   <span className="text-xs text-gray-500">Total Ruangan</span>
-                  <p className="font-semibold text-lg">{floorsData.reduce((acc, f) => acc + (f.rooms_count || 0), 0)}</p>
+                  <p className="font-semibold text-lg">{totalRooms}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-100">
@@ -269,7 +450,7 @@ const BuildingDetail = () => {
             </div>
             <div>
               <p className="text-2xl font-bold text-gray-800">{floorsData.length}</p>
-              <p className="text-sm text-gray-500">Lantai Aktif</p>
+              <p className="text-sm text-gray-500">Total Lantai</p>
             </div>
           </div>
         </div>
@@ -279,7 +460,7 @@ const BuildingDetail = () => {
               <FiCheckCircle className="w-6 h-6 text-white" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-gray-800">{itemsData.filter(i => i.condition === 'Baik').length}</p>
+              <p className="text-2xl font-bold text-gray-800">{goodConditionItems}</p>
               <p className="text-sm text-gray-500">Item Kondisi Baik</p>
             </div>
           </div>
@@ -290,7 +471,7 @@ const BuildingDetail = () => {
               <FiXCircle className="w-6 h-6 text-white" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-gray-800">{itemsData.filter(i => i.condition !== 'Baik').length}</p>
+              <p className="text-2xl font-bold text-gray-800">{needAttentionItems}</p>
               <p className="text-sm text-gray-500">Item Perlu Perhatian</p>
             </div>
           </div>
@@ -313,11 +494,17 @@ const BuildingDetail = () => {
             <DataTable
               columns={floorColumns}
               data={floorsData}
-              onView={(item) => navigate(`/master/floors/${item.id}`)}
+              loading={masterLoading}
+              onView={(item) => navigate(`/master/floors/${item.floor_id}`)}
               onEdit={handleEditFloor}
               onDelete={handleDeleteFloor}
               showActions={true}
               actionColumn={{ view: true, edit: true, delete: true }}
+              currentPage={floorsPagination.page}
+              totalPages={floorsPagination.totalPages}
+              totalItems={floorsPagination.total}
+              itemsPerPage={itemsPerPage}
+              onPageChange={handleFloorPageChange}
             />
           </Tabs.Tab>
 
@@ -334,10 +521,16 @@ const BuildingDetail = () => {
             <DataTable
               columns={itemColumns}
               data={itemsData}
+              loading={dataLoading}
               onEdit={handleEditItem}
               onDelete={handleDeleteItem}
               showActions={true}
               actionColumn={{ view: false, edit: true, delete: true }}
+              currentPage={itemsPagination.page}
+              totalPages={itemsPagination.totalPages}
+              totalItems={itemsPagination.total}
+              itemsPerPage={itemsPerPage}
+              onPageChange={handleItemPageChange}
             />
           </Tabs.Tab>
         </Tabs>
@@ -349,43 +542,15 @@ const BuildingDetail = () => {
         onClose={() => setIsFloorModalOpen(false)}
         title={selectedFloor ? 'Edit Lantai' : 'Tambah Lantai'}
         onSubmit={handleFloorSubmit}
+        loading={floorFormLoading}
       >
-        <div className="grid grid-cols-2 gap-4">
-          <FormInput
-            label="Kode Lantai"
-            name="code"
-            value={floorForm.code}
-            onChange={(e) => setFloorForm({ ...floorForm, code: e.target.value })}
-            placeholder="Contoh: L1"
-            required
-          />
-          <FormInput
-            label="Nama Lantai"
-            name="name"
-            value={floorForm.name}
-            onChange={(e) => setFloorForm({ ...floorForm, name: e.target.value })}
-            placeholder="Contoh: Lantai 1"
-            required
-          />
-        </div>
         <FormInput
-          label="Deskripsi"
-          name="description"
-          type="textarea"
-          value={floorForm.description}
-          onChange={(e) => setFloorForm({ ...floorForm, description: e.target.value })}
-          placeholder="Deskripsi lantai"
-        />
-        <FormInput
-          label="Status"
-          name="status"
-          type="select"
-          value={floorForm.status}
-          onChange={(e) => setFloorForm({ ...floorForm, status: e.target.value })}
-          options={[
-            { value: 'active', label: 'Aktif' },
-            { value: 'inactive', label: 'Nonaktif' },
-          ]}
+          label="Nama Lantai"
+          name="floor_name"
+          value={floorForm.floor_name}
+          onChange={(e) => setFloorForm({ ...floorForm, floor_name: e.target.value })}
+          placeholder="Contoh: Lantai 1"
+          required
         />
       </Modal>
 
@@ -395,7 +560,7 @@ const BuildingDetail = () => {
         onClose={() => setIsFloorDeleteOpen(false)}
         onConfirm={handleConfirmDeleteFloor}
         title="Hapus Lantai"
-        message={`Apakah Anda yakin ingin menghapus "${selectedFloor?.name}"?`}
+        message={`Apakah Anda yakin ingin menghapus "${selectedFloor?.floor_name}"?`}
         confirmText="Ya, Hapus"
         type="danger"
       />
@@ -406,60 +571,67 @@ const BuildingDetail = () => {
         onClose={() => setIsItemModalOpen(false)}
         title={selectedItem ? 'Edit Item' : 'Tambah Item'}
         onSubmit={handleItemSubmit}
+        loading={itemFormLoading}
       >
         <div className="grid grid-cols-2 gap-4">
           <FormInput
             label="Kode Item"
-            name="code"
-            value={itemForm.code}
-            onChange={(e) => setItemForm({ ...itemForm, code: e.target.value })}
+            name="item_code"
+            value={itemForm.item_code}
+            onChange={(e) => setItemForm({ ...itemForm, item_code: e.target.value })}
             placeholder="Contoh: AC-001"
             required
           />
           <FormInput
             label="Nama Item"
-            name="name"
-            value={itemForm.name}
-            onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })}
+            name="item_name"
+            value={itemForm.item_name}
+            onChange={(e) => setItemForm({ ...itemForm, item_name: e.target.value })}
             placeholder="Contoh: AC Split 2PK"
             required
           />
         </div>
+        <FormInput
+          label="Deskripsi"
+          name="item_description"
+          type="textarea"
+          value={itemForm.item_description}
+          onChange={(e) => setItemForm({ ...itemForm, item_description: e.target.value })}
+          placeholder="Deskripsi item..."
+        />
         <div className="grid grid-cols-2 gap-4">
           <FormInput
             label="Kategori"
-            name="category"
+            name="category_item_id"
             type="select"
-            value={itemForm.category}
-            onChange={(e) => setItemForm({ ...itemForm, category: e.target.value })}
-            options={categories}
-            required
+            value={itemForm.category_item_id}
+            onChange={(e) => setItemForm({ ...itemForm, category_item_id: e.target.value })}
+            options={[{ value: '', label: 'Pilih Kategori' }, ...categoryOptions]}
           />
           <FormInput
             label="Jumlah"
-            name="quantity"
+            name="total"
             type="number"
-            value={itemForm.quantity}
-            onChange={(e) => setItemForm({ ...itemForm, quantity: e.target.value })}
+            value={itemForm.total}
+            onChange={(e) => setItemForm({ ...itemForm, total: e.target.value })}
             placeholder="Contoh: 10"
-            required
           />
         </div>
         <div className="grid grid-cols-2 gap-4">
           <FormInput
             label="Kondisi"
-            name="condition"
+            name="item_condition"
             type="select"
-            value={itemForm.condition}
-            onChange={(e) => setItemForm({ ...itemForm, condition: e.target.value })}
+            value={itemForm.item_condition}
+            onChange={(e) => setItemForm({ ...itemForm, item_condition: e.target.value })}
             options={conditions}
           />
           <FormInput
-            label="Lokasi"
-            name="location"
-            value={itemForm.location}
-            onChange={(e) => setItemForm({ ...itemForm, location: e.target.value })}
-            placeholder="Contoh: Lantai 1-5"
+            label="Merk"
+            name="brand"
+            value={itemForm.brand}
+            onChange={(e) => setItemForm({ ...itemForm, brand: e.target.value })}
+            placeholder="Contoh: Daikin"
           />
         </div>
       </Modal>
@@ -470,7 +642,7 @@ const BuildingDetail = () => {
         onClose={() => setIsItemDeleteOpen(false)}
         onConfirm={handleConfirmDeleteItem}
         title="Hapus Item"
-        message={`Apakah Anda yakin ingin menghapus "${selectedItem?.name}"?`}
+        message={`Apakah Anda yakin ingin menghapus "${selectedItem?.item_name}"?`}
         confirmText="Ya, Hapus"
         type="danger"
       />

@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { toast } from 'react-hot-toast';
 import MainLayout from '../../layouts/MainLayout';
 import {
   DataTable,
@@ -9,116 +11,35 @@ import {
   ConfirmDialog,
   PageHeader,
 } from '../../components/ui';
+import { FiLoader } from 'react-icons/fi';
+import {
+  fetchEventCategories,
+  createEventCategory,
+  updateEventCategory,
+  deleteEventCategory,
+  clearMasterError,
+  clearMasterSuccess,
+} from '../../store/masterSlice';
 
 const EventCategories = () => {
+  const dispatch = useDispatch();
+  const { eventCategories, loading, error, success } = useSelector((state) => state.master);
+
   const [searchValue, setSearchValue] = useState('');
   const [filterValues, setFilterValues] = useState({});
   const [currentPage, setCurrentPage] = useState(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [formLoading, setFormLoading] = useState(false);
   const [formData, setFormData] = useState({
-    name: '',
+    category_name: '',
     color: '#4A22AD',
     description: '',
-    status: 'active',
+    is_active: 1,
   });
 
-  // Dummy data
-  const data = [
-    { id: 1, name: 'Seminar', color: '#4A22AD', description: 'Seminar dan workshop akademik', event_count: 15, status: 'active' },
-    { id: 2, name: 'Rapat', color: '#2563EB', description: 'Rapat internal universitas', event_count: 45, status: 'active' },
-    { id: 3, name: 'Wisuda', color: '#059669', description: 'Upacara wisuda dan kelulusan', event_count: 4, status: 'active' },
-    { id: 4, name: 'Dies Natalis', color: '#DC2626', description: 'Perayaan ulang tahun universitas', event_count: 1, status: 'active' },
-    { id: 5, name: 'Pelatihan', color: '#D97706', description: 'Pelatihan dan pengembangan SDM', event_count: 12, status: 'active' },
-    { id: 6, name: 'Lomba', color: '#7C3AED', description: 'Kompetisi dan perlombaan', event_count: 8, status: 'active' },
-    { id: 7, name: 'Kegiatan Mahasiswa', color: '#0891B2', description: 'Kegiatan UKM dan organisasi', event_count: 30, status: 'active' },
-    { id: 8, name: 'Lainnya', color: '#6B7280', description: 'Kategori lainnya', event_count: 5, status: 'inactive' },
-  ];
-
-  const columns = [
-    {
-      key: 'color',
-      label: 'Warna',
-      width: '80px',
-      render: (value) => (
-        <div className="flex items-center justify-center">
-          <div
-            className="w-6 h-6 rounded-full border-2 border-white shadow"
-            style={{ backgroundColor: value }}
-          ></div>
-        </div>
-      ),
-    },
-    { key: 'name', label: 'Nama Kategori' },
-    { key: 'description', label: 'Deskripsi' },
-    { key: 'event_count', label: 'Jumlah Event', width: '120px' },
-    {
-      key: 'status',
-      label: 'Status',
-      width: '100px',
-      render: (value) => <StatusBadge status={value} />,
-    },
-  ];
-
-  const filters = [
-    {
-      key: 'status',
-      label: 'Status',
-      options: [
-        { value: 'active', label: 'Aktif' },
-        { value: 'inactive', label: 'Nonaktif' },
-      ],
-    },
-  ];
-
-  const handleFilterChange = (key, value) => {
-    setFilterValues((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const handleAdd = () => {
-    setSelectedItem(null);
-    setFormData({ name: '', color: '#4A22AD', description: '', status: 'active' });
-    setIsModalOpen(true);
-  };
-
-  const handleEdit = (item) => {
-    setSelectedItem(item);
-    setFormData({
-      name: item.name,
-      color: item.color,
-      description: item.description,
-      status: item.status,
-    });
-    setIsModalOpen(true);
-  };
-
-  const handleDelete = (item) => {
-    setSelectedItem(item);
-    setIsDeleteOpen(true);
-  };
-
-  const handleSubmit = () => {
-    console.log('Form submitted:', formData);
-    setIsModalOpen(false);
-  };
-
-  const handleConfirmDelete = () => {
-    console.log('Deleted:', selectedItem);
-    setIsDeleteOpen(false);
-  };
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  // Filter data
-  const filteredData = data.filter((item) => {
-    const matchSearch = item.name.toLowerCase().includes(searchValue.toLowerCase());
-    const matchStatus = !filterValues.status || item.status === filterValues.status;
-    return matchSearch && matchStatus;
-  });
+  const itemsPerPage = 10;
 
   // Predefined colors
   const colorOptions = [
@@ -131,6 +52,145 @@ const EventCategories = () => {
     { value: '#0891B2', label: 'Cyan' },
     { value: '#6B7280', label: 'Abu-abu' },
   ];
+
+  // Load event categories
+  const loadEventCategories = useCallback(() => {
+    const params = {
+      page: currentPage,
+      limit: itemsPerPage,
+      search: searchValue,
+      ...filterValues,
+    };
+    dispatch(fetchEventCategories(params));
+  }, [dispatch, currentPage, itemsPerPage, searchValue, filterValues]);
+
+  useEffect(() => {
+    loadEventCategories();
+  }, [loadEventCategories]);
+
+  // Handle errors
+  useEffect(() => {
+    if (error) {
+      toast.error(error);
+      dispatch(clearMasterError());
+    }
+  }, [error, dispatch]);
+
+  // Handle success
+  useEffect(() => {
+    if (success) {
+      toast.success(success);
+      dispatch(clearMasterSuccess());
+      loadEventCategories();
+    }
+  }, [success, dispatch, loadEventCategories]);
+
+  // Reset page when search/filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchValue, filterValues]);
+
+  const columns = [
+    {
+      key: 'color',
+      label: 'Warna',
+      width: '80px',
+      render: (value) => (
+        <div className="flex items-center justify-center">
+          <div
+            className="w-6 h-6 rounded-full border-2 border-white shadow"
+            style={{ backgroundColor: value || '#6B7280' }}
+          ></div>
+        </div>
+      ),
+    },
+    { key: 'category_name', label: 'Nama Kategori' },
+    { key: 'description', label: 'Deskripsi' },
+    {
+      key: 'event_count',
+      label: 'Jumlah Event',
+      width: '120px',
+      render: (value) => value || 0,
+    },
+    {
+      key: 'is_active',
+      label: 'Status',
+      width: '100px',
+      render: (value) => <StatusBadge status={value === 1 ? 'active' : 'inactive'} />,
+    },
+  ];
+
+  const filters = [
+    {
+      key: 'is_active',
+      label: 'Status',
+      options: [
+        { value: '1', label: 'Aktif' },
+        { value: '0', label: 'Nonaktif' },
+      ],
+    },
+  ];
+
+  const handleFilterChange = (key, value) => {
+    setFilterValues((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleAdd = () => {
+    setSelectedItem(null);
+    setFormData({ category_name: '', color: '#4A22AD', description: '', is_active: 1 });
+    setIsModalOpen(true);
+  };
+
+  const handleEdit = (item) => {
+    setSelectedItem(item);
+    setFormData({
+      category_name: item.category_name || '',
+      color: item.color || '#4A22AD',
+      description: item.description || '',
+      is_active: item.is_active,
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleDelete = (item) => {
+    setSelectedItem(item);
+    setIsDeleteOpen(true);
+  };
+
+  const handleSubmit = async () => {
+    setFormLoading(true);
+    try {
+      const submitData = {
+        ...formData,
+        is_active: parseInt(formData.is_active),
+      };
+
+      if (selectedItem) {
+        await dispatch(updateEventCategory({ id: selectedItem.event_category_id, data: submitData })).unwrap();
+      } else {
+        await dispatch(createEventCategory(submitData)).unwrap();
+      }
+      setIsModalOpen(false);
+    } catch (err) {
+      // Error handled by slice
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    try {
+      await dispatch(deleteEventCategory(selectedItem.event_category_id)).unwrap();
+      setIsDeleteOpen(false);
+    } catch (err) {
+      // Error handled by slice
+    }
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
 
   return (
     <MainLayout>
@@ -155,15 +215,23 @@ const EventCategories = () => {
         addLabel="Tambah Kategori"
       />
 
-      <DataTable
-        columns={columns}
-        data={filteredData}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-        currentPage={currentPage}
-        totalPages={Math.ceil(filteredData.length / 10)}
-        onPageChange={setCurrentPage}
-      />
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <FiLoader className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={eventCategories.data}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+          currentPage={eventCategories.pagination.page}
+          totalPages={eventCategories.pagination.totalPages}
+          totalItems={eventCategories.pagination.total}
+          itemsPerPage={itemsPerPage}
+          onPageChange={setCurrentPage}
+        />
+      )}
 
       {/* Add/Edit Modal */}
       <Modal
@@ -171,11 +239,12 @@ const EventCategories = () => {
         onClose={() => setIsModalOpen(false)}
         title={selectedItem ? 'Edit Kategori' : 'Tambah Kategori'}
         onSubmit={handleSubmit}
+        loading={formLoading}
       >
         <FormInput
           label="Nama Kategori"
-          name="name"
-          value={formData.name}
+          name="category_name"
+          value={formData.category_name}
           onChange={handleInputChange}
           placeholder="Contoh: Seminar"
           required
@@ -217,13 +286,13 @@ const EventCategories = () => {
         />
         <FormInput
           label="Status"
-          name="status"
+          name="is_active"
           type="select"
-          value={formData.status}
-          onChange={handleInputChange}
+          value={formData.is_active?.toString()}
+          onChange={(e) => setFormData((prev) => ({ ...prev, is_active: parseInt(e.target.value) }))}
           options={[
-            { value: 'active', label: 'Aktif' },
-            { value: 'inactive', label: 'Nonaktif' },
+            { value: '1', label: 'Aktif' },
+            { value: '0', label: 'Nonaktif' },
           ]}
         />
       </Modal>
@@ -234,9 +303,10 @@ const EventCategories = () => {
         onClose={() => setIsDeleteOpen(false)}
         onConfirm={handleConfirmDelete}
         title="Hapus Kategori"
-        message={`Apakah Anda yakin ingin menghapus "${selectedItem?.name}"? Event dengan kategori ini akan perlu dipindahkan.`}
+        message={`Apakah Anda yakin ingin menghapus "${selectedItem?.category_name}"? Event dengan kategori ini akan perlu dipindahkan.`}
         confirmText="Ya, Hapus"
         type="danger"
+        loading={loading}
       />
     </MainLayout>
   );

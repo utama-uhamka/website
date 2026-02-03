@@ -6,3 +6,4 @@ export { default as StatusBadge } from './StatusBadge';
 export { default as ConfirmDialog } from './ConfirmDialog';
 export { default as PageHeader } from './PageHeader';
 export { default as Tabs } from './Tabs';
+export { default as ImageWithFallback, AvatarWithFallback, ThumbnailWithFallback, CardImageWithFallback } from './ImageWithFallback';

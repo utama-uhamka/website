@@ -1,22 +1,37 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { toast } from 'react-hot-toast';
 import MainLayout from '../layouts/MainLayout';
 import {
   DataTable,
   Modal,
   SearchFilter,
   StatusBadge,
+  FormInput,
   PageHeader,
+  AvatarWithFallback,
+  ImageWithFallback,
 } from '../components/ui';
-import { FiUser, FiImage, FiMapPin, FiCalendar } from 'react-icons/fi';
+import { FiUser, FiImage, FiMapPin, FiCalendar, FiLoader } from 'react-icons/fi';
+import { fetchIssues, updateIssue, resolveIssue, clearDataError, clearDataSuccess } from '../store/dataSlice';
+import { fetchUsers } from '../store/usersSlice';
 
 const Issue = () => {
+  const dispatch = useDispatch();
+  const { issues, loading, error, success } = useSelector((state) => state.data);
+  const { data: users } = useSelector((state) => state.users);
+
   const [searchValue, setSearchValue] = useState('');
   const [filterValues, setFilterValues] = useState({});
   const [currentPage, setCurrentPage] = useState(1);
   const [isViewOpen, setIsViewOpen] = useState(false);
+  const [isAssignOpen, setIsAssignOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [assignData, setAssignData] = useState({ assigned_to: '', status: '' });
+  const [formLoading, setFormLoading] = useState(false);
 
-  // Dummy data
+  const itemsPerPage = 10;
+
   const priorities = [
     { value: 'low', label: 'Rendah' },
     { value: 'medium', label: 'Sedang' },
@@ -31,14 +46,53 @@ const Issue = () => {
     { value: 'closed', label: 'Closed' },
   ];
 
-  const data = [
-    { id: 1, title: 'AC Ruang 101 tidak dingin', description: 'AC di ruang 101 sudah dinyalakan tapi tidak dingin. Sudah dicek filter dan remote, namun tetap tidak berfungsi dengan baik.', location: 'Ruang 101 - Gedung Rektorat', priority: 'high', reporter: 'Ahmad Fauzi', reporter_id: '1', assigned: 'Dani Pratama', assigned_id: '4', created_at: '2024-12-27', status: 'in_progress', image: '/issue1.jpg' },
-    { id: 2, title: 'Lampu koridor mati', description: 'Beberapa lampu di koridor lantai 2 mati, membuat area menjadi gelap terutama di malam hari.', location: 'Koridor Lt.2 - Gedung FKIP', priority: 'medium', reporter: 'Budi Santoso', reporter_id: '2', assigned: 'Dani Pratama', assigned_id: '4', created_at: '2024-12-26', status: 'open', image: null },
-    { id: 3, title: 'Kebocoran pipa kamar mandi', description: 'Pipa di kamar mandi lantai 1 bocor dan air menggenang di lantai. Perlu segera diperbaiki.', location: 'KM Lt.1 - Gedung FEB', priority: 'critical', reporter: 'Citra Dewi', reporter_id: '3', assigned: null, assigned_id: null, created_at: '2024-12-27', status: 'open', image: '/issue3.jpg' },
-    { id: 4, title: 'Pintu kelas tidak bisa dikunci', description: 'Kunci pintu ruang 201 rusak sehingga tidak bisa dikunci dengan baik.', location: 'Ruang 201 - Gedung FKIP', priority: 'high', reporter: 'Ahmad Fauzi', reporter_id: '1', assigned: 'Budi Santoso', assigned_id: '2', created_at: '2024-12-25', status: 'resolved', image: null },
-    { id: 5, title: 'Proyektor error', description: 'Proyektor di ruang rapat menampilkan warna aneh dan gambar tidak fokus.', location: 'Ruang Rapat A - Gedung Rektorat', priority: 'medium', reporter: 'Dani Pratama', reporter_id: '4', assigned: 'Ahmad Fauzi', assigned_id: '1', created_at: '2024-12-24', status: 'closed', image: null },
-    { id: 6, title: 'Keran air macet', description: 'Keran air di pantry tidak bisa diputar, kemungkinan karat.', location: 'Pantry - Gedung Rektorat', priority: 'low', reporter: 'Budi Santoso', reporter_id: '2', assigned: null, assigned_id: null, created_at: '2024-12-27', status: 'open', image: null },
-  ];
+  // Load issues
+  const loadIssues = useCallback(() => {
+    const params = {
+      page: currentPage,
+      limit: itemsPerPage,
+      search: searchValue,
+      ...filterValues,
+    };
+    dispatch(fetchIssues(params));
+  }, [dispatch, currentPage, itemsPerPage, searchValue, filterValues]);
+
+  useEffect(() => {
+    loadIssues();
+  }, [loadIssues]);
+
+  // Load users for assignment
+  useEffect(() => {
+    dispatch(fetchUsers({ limit: 100 }));
+  }, [dispatch]);
+
+  // Handle errors
+  useEffect(() => {
+    if (error) {
+      toast.error(error);
+      dispatch(clearDataError());
+    }
+  }, [error, dispatch]);
+
+  // Handle success
+  useEffect(() => {
+    if (success) {
+      toast.success(success);
+      dispatch(clearDataSuccess());
+      loadIssues();
+    }
+  }, [success, dispatch, loadIssues]);
+
+  // Reset page when search/filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchValue, filterValues]);
+
+  // User options for assignment
+  const userOptions = users.map((u) => ({
+    value: u.user_id?.toString(),
+    label: u.full_name,
+  }));
 
   const columns = [
     {
@@ -46,8 +100,8 @@ const Issue = () => {
       label: 'Issue',
       render: (value, item) => (
         <div>
-          <p className="font-medium text-gray-800">{value}</p>
-          <p className="text-xs text-gray-500 mt-0.5">{item.location}</p>
+          <p className="font-medium text-gray-800">{value || item.issue_title}</p>
+          <p className="text-xs text-gray-500 mt-0.5">{item.room?.room_name || item.location || '-'}</p>
         </div>
       ),
     },
@@ -61,12 +115,10 @@ const Issue = () => {
       key: 'reporter',
       label: 'Pelapor',
       width: '130px',
-      render: (value) => (
+      render: (value, item) => (
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center">
-            <FiUser size={14} className="text-gray-500" />
-          </div>
-          <span className="text-sm">{value}</span>
+          <AvatarWithFallback src={item.user?.photo_1} alt={item.user?.full_name} size={28} />
+          <span className="text-sm">{item.user?.full_name || '-'}</span>
         </div>
       ),
     },
@@ -74,22 +126,21 @@ const Issue = () => {
       key: 'assigned',
       label: 'Ditugaskan',
       width: '130px',
-      render: (value) => value ? (
+      render: (value, item) => item.assignee?.full_name ? (
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center">
-            <FiUser size={14} className="text-primary" />
-          </div>
-          <span className="text-sm">{value}</span>
+          <AvatarWithFallback src={item.assignee?.photo_1} alt={item.assignee?.full_name} size={28} />
+          <span className="text-sm">{item.assignee?.full_name}</span>
         </div>
       ) : (
         <span className="text-gray-400 text-sm">Belum ditugaskan</span>
       ),
     },
     {
-      key: 'created_at',
+      key: 'createdAt',
       label: 'Tanggal',
       width: '110px',
       render: (value) => {
+        if (!value) return '-';
         const date = new Date(value);
         return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
       },
@@ -124,20 +175,63 @@ const Issue = () => {
     setIsViewOpen(true);
   };
 
-  // Filter data
-  const filteredData = data.filter((item) => {
-    const matchSearch =
-      item.title.toLowerCase().includes(searchValue.toLowerCase()) ||
-      item.location.toLowerCase().includes(searchValue.toLowerCase());
-    const matchPriority = !filterValues.priority || item.priority === filterValues.priority;
-    const matchStatus = !filterValues.status || item.status === filterValues.status;
-    return matchSearch && matchPriority && matchStatus;
-  });
+  const handleAssign = (item) => {
+    setSelectedItem(item);
+    setAssignData({
+      assigned_to: item.assigned_to?.toString() || '',
+      status: item.status || 'open',
+    });
+    setIsAssignOpen(true);
+  };
 
-  // Stats
-  const openCount = data.filter(d => d.status === 'open').length;
-  const inProgressCount = data.filter(d => d.status === 'in_progress').length;
-  const resolvedCount = data.filter(d => d.status === 'resolved' || d.status === 'closed').length;
+  const handleSubmitAssign = async () => {
+    setFormLoading(true);
+    try {
+      const submitData = {
+        assigned_to: assignData.assigned_to ? parseInt(assignData.assigned_to) : null,
+        status: assignData.status,
+      };
+      await dispatch(updateIssue({ id: selectedItem.issue_id, data: submitData })).unwrap();
+      setIsAssignOpen(false);
+    } catch (err) {
+      // Error handled by slice
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const handleResolve = async (item) => {
+    try {
+      await dispatch(resolveIssue(item.issue_id)).unwrap();
+    } catch (err) {
+      // Error handled by slice
+    }
+  };
+
+  const handleAssignInputChange = (e) => {
+    const { name, value } = e.target;
+    setAssignData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  // Calculate stats
+  const openCount = issues.data.filter(d => d.status === 'open').length;
+  const inProgressCount = issues.data.filter(d => d.status === 'in_progress').length;
+  const resolvedCount = issues.data.filter(d => d.status === 'resolved' || d.status === 'closed').length;
+
+  // Custom actions for issues
+  const customActions = (item) => {
+    if (item.status === 'open' || item.status === 'in_progress') {
+      return (
+        <button
+          onClick={() => handleAssign(item)}
+          className="px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10 rounded transition-colors"
+        >
+          {item.assigned_to ? 'Reassign' : 'Assign'}
+        </button>
+      );
+    }
+    return null;
+  };
 
   return (
     <MainLayout>
@@ -154,7 +248,7 @@ const Issue = () => {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-white rounded-xl p-5 shadow-sm">
           <p className="text-sm text-gray-500 mb-1">Total Issue</p>
-          <p className="text-2xl font-bold text-gray-800">{data.length}</p>
+          <p className="text-2xl font-bold text-gray-800">{issues.pagination.total || 0}</p>
         </div>
         <div className="bg-blue-50 rounded-xl p-5 shadow-sm">
           <p className="text-sm text-blue-600 mb-1">Open</p>
@@ -181,15 +275,24 @@ const Issue = () => {
         onExport={() => console.log('Export issues')}
       />
 
-      <DataTable
-        columns={columns}
-        data={filteredData}
-        onView={handleView}
-        actionColumn={{ edit: false, delete: false, view: true }}
-        currentPage={currentPage}
-        totalPages={Math.ceil(filteredData.length / 10)}
-        onPageChange={setCurrentPage}
-      />
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <FiLoader className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={issues.data}
+          onView={handleView}
+          actionColumn={{ edit: false, delete: false, view: true }}
+          customActions={customActions}
+          currentPage={issues.pagination.page}
+          totalPages={issues.pagination.totalPages}
+          totalItems={issues.pagination.total}
+          itemsPerPage={itemsPerPage}
+          onPageChange={setCurrentPage}
+        />
+      )}
 
       {/* View Modal */}
       <Modal
@@ -202,7 +305,7 @@ const Issue = () => {
         {selectedItem && (
           <div className="space-y-4">
             <div>
-              <h3 className="text-lg font-semibold text-gray-800">{selectedItem.title}</h3>
+              <h3 className="text-lg font-semibold text-gray-800">{selectedItem.issue_title || selectedItem.title}</h3>
               <div className="flex items-center gap-3 mt-2">
                 <StatusBadge status={selectedItem.priority} />
                 <StatusBadge status={selectedItem.status} />
@@ -218,33 +321,33 @@ const Issue = () => {
                 <p className="text-xs text-gray-500 mb-1">Lokasi</p>
                 <div className="flex items-center gap-2">
                   <FiMapPin size={14} className="text-gray-400" />
-                  <span className="text-sm font-medium">{selectedItem.location}</span>
+                  <span className="text-sm font-medium">{selectedItem.room?.room_name || selectedItem.location || '-'}</span>
                 </div>
               </div>
               <div>
                 <p className="text-xs text-gray-500 mb-1">Tanggal Lapor</p>
                 <div className="flex items-center gap-2">
                   <FiCalendar size={14} className="text-gray-400" />
-                  <span className="text-sm font-medium">{new Date(selectedItem.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                  <span className="text-sm font-medium">
+                    {selectedItem.createdAt
+                      ? new Date(selectedItem.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+                      : '-'}
+                  </span>
                 </div>
               </div>
               <div>
                 <p className="text-xs text-gray-500 mb-1">Pelapor</p>
                 <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center">
-                    <FiUser size={12} className="text-gray-500" />
-                  </div>
-                  <span className="text-sm font-medium">{selectedItem.reporter}</span>
+                  <AvatarWithFallback src={selectedItem.user?.photo_1} alt={selectedItem.user?.full_name} size={24} />
+                  <span className="text-sm font-medium">{selectedItem.user?.full_name || '-'}</span>
                 </div>
               </div>
               <div>
                 <p className="text-xs text-gray-500 mb-1">Ditugaskan ke</p>
-                {selectedItem.assigned ? (
+                {selectedItem.assignee?.full_name ? (
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center">
-                      <FiUser size={12} className="text-primary" />
-                    </div>
-                    <span className="text-sm font-medium">{selectedItem.assigned}</span>
+                    <AvatarWithFallback src={selectedItem.assignee?.photo_1} alt={selectedItem.assignee?.full_name} size={24} />
+                    <span className="text-sm font-medium">{selectedItem.assignee?.full_name}</span>
                   </div>
                 ) : (
                   <span className="text-sm text-gray-400">Belum ditugaskan</span>
@@ -252,16 +355,79 @@ const Issue = () => {
               </div>
             </div>
 
-            {selectedItem.image && (
+            {(selectedItem.photo_1 || selectedItem.photo_2) && (
               <div>
                 <p className="text-xs text-gray-500 mb-2">Foto Lampiran</p>
-                <div className="w-full h-48 bg-gray-100 rounded-lg flex items-center justify-center">
-                  <FiImage size={32} className="text-gray-400" />
+                <div className="flex gap-2">
+                  {selectedItem.photo_1 && (
+                    <div className="w-1/2 h-48 bg-gray-100 rounded-lg overflow-hidden">
+                      <ImageWithFallback src={selectedItem.photo_1} alt="Issue Photo 1" className="w-full h-full" />
+                    </div>
+                  )}
+                  {selectedItem.photo_2 && (
+                    <div className="w-1/2 h-48 bg-gray-100 rounded-lg overflow-hidden">
+                      <ImageWithFallback src={selectedItem.photo_2} alt="Issue Photo 2" className="w-full h-full" />
+                    </div>
+                  )}
                 </div>
+              </div>
+            )}
+
+            {(selectedItem.status === 'open' || selectedItem.status === 'in_progress') && (
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => {
+                    setIsViewOpen(false);
+                    handleAssign(selectedItem);
+                  }}
+                  className="flex-1 px-4 py-2.5 bg-primary text-white font-medium rounded-lg hover:bg-primary/90 transition-colors"
+                >
+                  {selectedItem.assigned_to ? 'Reassign' : 'Assign'}
+                </button>
+                {selectedItem.status === 'in_progress' && (
+                  <button
+                    onClick={() => {
+                      setIsViewOpen(false);
+                      handleResolve(selectedItem);
+                    }}
+                    className="flex-1 px-4 py-2.5 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition-colors"
+                  >
+                    Mark as Resolved
+                  </button>
+                )}
               </div>
             )}
           </div>
         )}
+      </Modal>
+
+      {/* Assign Modal */}
+      <Modal
+        isOpen={isAssignOpen}
+        onClose={() => setIsAssignOpen(false)}
+        title="Assign Issue"
+        onSubmit={handleSubmitAssign}
+        loading={formLoading}
+        size="md"
+      >
+        <FormInput
+          label="Ditugaskan ke"
+          name="assigned_to"
+          type="select"
+          value={assignData.assigned_to}
+          onChange={handleAssignInputChange}
+          options={userOptions}
+          placeholder="Pilih petugas"
+        />
+        <FormInput
+          label="Status"
+          name="status"
+          type="select"
+          value={assignData.status}
+          onChange={handleAssignInputChange}
+          options={statuses}
+          required
+        />
       </Modal>
     </MainLayout>
   );

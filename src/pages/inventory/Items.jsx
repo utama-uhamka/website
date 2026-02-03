@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { toast } from 'react-hot-toast';
 import MainLayout from '../../layouts/MainLayout';
 import {
   DataTable,
@@ -8,98 +10,147 @@ import {
   StatusBadge,
   ConfirmDialog,
   PageHeader,
+  ThumbnailWithFallback,
 } from '../../components/ui';
-import { FiPackage, FiImage } from 'react-icons/fi';
+import { FiPackage, FiImage, FiLoader } from 'react-icons/fi';
+import {
+  fetchItems,
+  createItem,
+  updateItem,
+  deleteItem,
+  clearDataError,
+  clearDataSuccess,
+} from '../../store/dataSlice';
+import { fetchCategoryItems, fetchRooms } from '../../store/masterSlice';
 
 const Items = () => {
+  const dispatch = useDispatch();
+  const { items } = useSelector((state) => state.data);
+  const { categoryItems, rooms } = useSelector((state) => state.master);
+
   const [searchValue, setSearchValue] = useState('');
   const [filterValues, setFilterValues] = useState({});
   const [currentPage, setCurrentPage] = useState(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [formLoading, setFormLoading] = useState(false);
   const [formData, setFormData] = useState({
-    name: '',
-    code: '',
-    category_id: '',
+    item_name: '',
+    item_code: '',
+    category_item_id: '',
     room_id: '',
-    quantity: '',
-    condition: '',
+    item_quantity: '',
+    item_condition: '',
     purchase_date: '',
     purchase_price: '',
-    description: '',
-    status: 'active',
+    item_description: '',
+    is_active: 1,
   });
 
-  // Dummy data
-  const categories = [
-    { value: '1', label: 'Elektronik' },
-    { value: '2', label: 'Furniture' },
-    { value: '3', label: 'Alat Tulis Kantor' },
-    { value: '4', label: 'Peralatan Lab' },
-  ];
-
-  const rooms = [
-    { value: '1', label: 'Ruang 101 - Ged. Rektorat' },
-    { value: '2', label: 'Lab Komputer - Ged. Rektorat' },
-    { value: '3', label: 'Ruang Rapat A - Ged. Rektorat' },
-    { value: '4', label: 'Kantor Dosen - Ged. FKIP' },
-  ];
+  const itemsPerPage = 10;
 
   const conditions = [
-    { value: 'good', label: 'Baik' },
-    { value: 'fair', label: 'Cukup' },
-    { value: 'poor', label: 'Kurang' },
-    { value: 'broken', label: 'Rusak' },
+    { value: 'Baik', label: 'Baik' },
+    { value: 'Cukup', label: 'Cukup' },
+    { value: 'Kurang', label: 'Kurang' },
+    { value: 'Rusak', label: 'Rusak' },
   ];
 
-  const data = [
-    { id: 1, name: 'Komputer Desktop Dell', code: 'ELK-001', category: 'Elektronik', category_id: '1', room: 'Lab Komputer', room_id: '2', quantity: 25, condition: 'good', condition_label: 'Baik', purchase_date: '2023-01-15', purchase_price: 12000000, image: null, status: 'active' },
-    { id: 2, name: 'Meja Kerja', code: 'FRN-001', category: 'Furniture', category_id: '2', room: 'Ruang 101', room_id: '1', quantity: 40, condition: 'good', condition_label: 'Baik', purchase_date: '2022-06-20', purchase_price: 1500000, image: null, status: 'active' },
-    { id: 3, name: 'Kursi Kantor', code: 'FRN-002', category: 'Furniture', category_id: '2', room: 'Ruang 101', room_id: '1', quantity: 45, condition: 'fair', condition_label: 'Cukup', purchase_date: '2022-06-20', purchase_price: 800000, image: null, status: 'active' },
-    { id: 4, name: 'Proyektor Epson', code: 'ELK-002', category: 'Elektronik', category_id: '1', room: 'Ruang Rapat A', room_id: '3', quantity: 5, condition: 'good', condition_label: 'Baik', purchase_date: '2023-03-10', purchase_price: 8500000, image: null, status: 'active' },
-    { id: 5, name: 'Printer HP LaserJet', code: 'ELK-003', category: 'Elektronik', category_id: '1', room: 'Kantor Dosen', room_id: '4', quantity: 3, condition: 'fair', condition_label: 'Cukup', purchase_date: '2021-11-05', purchase_price: 3500000, image: null, status: 'active' },
-    { id: 6, name: 'AC Daikin 2PK', code: 'ELK-004', category: 'Elektronik', category_id: '1', room: 'Lab Komputer', room_id: '2', quantity: 4, condition: 'good', condition_label: 'Baik', purchase_date: '2022-12-01', purchase_price: 7000000, image: null, status: 'active' },
-    { id: 7, name: 'Whiteboard Magnetic', code: 'ATK-001', category: 'Alat Tulis Kantor', category_id: '3', room: 'Ruang 101', room_id: '1', quantity: 10, condition: 'poor', condition_label: 'Kurang', purchase_date: '2020-01-15', purchase_price: 500000, image: null, status: 'inactive' },
-  ];
+  // Load items
+  const loadItems = useCallback(() => {
+    const params = {
+      page: currentPage,
+      limit: itemsPerPage,
+      search: searchValue,
+      ...filterValues,
+    };
+    dispatch(fetchItems(params));
+  }, [dispatch, currentPage, itemsPerPage, searchValue, filterValues]);
+
+  useEffect(() => {
+    loadItems();
+  }, [loadItems]);
+
+  // Load master data for dropdowns
+  useEffect(() => {
+    dispatch(fetchCategoryItems({ limit: 100 }));
+    dispatch(fetchRooms({ limit: 100 }));
+  }, [dispatch]);
+
+  // Handle success/error messages
+  useEffect(() => {
+    if (items.error) {
+      toast.error(items.error);
+      dispatch(clearDataError());
+    }
+  }, [items.error, dispatch]);
+
+  useEffect(() => {
+    if (items.success) {
+      toast.success(items.success);
+      dispatch(clearDataSuccess());
+      loadItems();
+    }
+  }, [items.success, dispatch, loadItems]);
+
+  // Reset page when search/filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchValue, filterValues]);
+
+  // Convert master data to options
+  const categoryOptions = categoryItems.data.map((c) => ({
+    value: c.category_item_id?.toString(),
+    label: c.category_item_name,
+  }));
+
+  const roomOptions = rooms.data.map((r) => ({
+    value: r.room_id?.toString(),
+    label: `${r.room_name} - ${r.floor?.floor_name || ''}`,
+  }));
 
   const columns = [
     {
-      key: 'name',
+      key: 'item_name',
       label: 'Item',
       render: (value, item) => (
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center">
-            {item.image ? (
-              <img src={item.image} alt={value} className="w-12 h-12 rounded-lg object-cover" />
-            ) : (
-              <FiPackage className="text-gray-400" size={20} />
-            )}
-          </div>
+          <ThumbnailWithFallback src={item.photo_1} alt={value} width={48} height={48} />
           <div>
             <p className="font-medium text-gray-800">{value}</p>
-            <p className="text-xs text-gray-500">{item.code}</p>
+            <p className="text-xs text-gray-500">{item.item_code}</p>
           </div>
         </div>
       ),
     },
-    { key: 'category', label: 'Kategori', width: '120px' },
-    { key: 'room', label: 'Lokasi', width: '150px' },
-    { key: 'quantity', label: 'Qty', width: '60px' },
     {
-      key: 'condition_label',
+      key: 'category',
+      label: 'Kategori',
+      width: '120px',
+      render: (value, item) => item.category_item?.category_item_name || '-',
+    },
+    {
+      key: 'room',
+      label: 'Lokasi',
+      width: '150px',
+      render: (value, item) => item.room?.room_name || '-',
+    },
+    { key: 'item_quantity', label: 'Qty', width: '60px' },
+    {
+      key: 'item_condition',
       label: 'Kondisi',
       width: '100px',
-      render: (value, item) => {
+      render: (value) => {
         const conditionColors = {
-          good: 'bg-green-100 text-green-700',
-          fair: 'bg-yellow-100 text-yellow-700',
-          poor: 'bg-orange-100 text-orange-700',
-          broken: 'bg-red-100 text-red-700',
+          Baik: 'bg-green-100 text-green-700',
+          Cukup: 'bg-yellow-100 text-yellow-700',
+          Kurang: 'bg-orange-100 text-orange-700',
+          Rusak: 'bg-red-100 text-red-700',
         };
         return (
-          <span className={`px-2 py-1 text-xs font-medium rounded-full ${conditionColors[item.condition] || 'bg-gray-100 text-gray-700'}`}>
-            {value}
+          <span className={`px-2 py-1 text-xs font-medium rounded-full ${conditionColors[value] || 'bg-gray-100 text-gray-700'}`}>
+            {value || '-'}
           </span>
         );
       },
@@ -108,33 +159,33 @@ const Items = () => {
       key: 'purchase_price',
       label: 'Harga',
       width: '120px',
-      render: (value) => `Rp ${value.toLocaleString('id-ID')}`,
+      render: (value) => value ? `Rp ${parseInt(value).toLocaleString('id-ID')}` : '-',
     },
     {
-      key: 'status',
+      key: 'is_active',
       label: 'Status',
       width: '100px',
-      render: (value) => <StatusBadge status={value} />,
+      render: (value) => <StatusBadge status={value === 1 ? 'active' : 'inactive'} />,
     },
   ];
 
   const filters = [
     {
-      key: 'category_id',
+      key: 'category_item_id',
       label: 'Kategori',
-      options: categories,
+      options: categoryOptions,
     },
     {
-      key: 'condition',
+      key: 'item_condition',
       label: 'Kondisi',
       options: conditions,
     },
     {
-      key: 'status',
+      key: 'is_active',
       label: 'Status',
       options: [
-        { value: 'active', label: 'Aktif' },
-        { value: 'inactive', label: 'Nonaktif' },
+        { value: '1', label: 'Aktif' },
+        { value: '0', label: 'Nonaktif' },
       ],
     },
   ];
@@ -146,16 +197,16 @@ const Items = () => {
   const handleAdd = () => {
     setSelectedItem(null);
     setFormData({
-      name: '',
-      code: '',
-      category_id: '',
+      item_name: '',
+      item_code: '',
+      category_item_id: '',
       room_id: '',
-      quantity: '',
-      condition: '',
+      item_quantity: '',
+      item_condition: '',
       purchase_date: '',
       purchase_price: '',
-      description: '',
-      status: 'active',
+      item_description: '',
+      is_active: 1,
     });
     setIsModalOpen(true);
   };
@@ -163,16 +214,16 @@ const Items = () => {
   const handleEdit = (item) => {
     setSelectedItem(item);
     setFormData({
-      name: item.name,
-      code: item.code,
-      category_id: item.category_id,
-      room_id: item.room_id,
-      quantity: item.quantity,
-      condition: item.condition,
-      purchase_date: item.purchase_date,
-      purchase_price: item.purchase_price,
-      description: item.description || '',
-      status: item.status,
+      item_name: item.item_name || '',
+      item_code: item.item_code || '',
+      category_item_id: item.category_item_id?.toString() || '',
+      room_id: item.room_id?.toString() || '',
+      item_quantity: item.item_quantity?.toString() || '',
+      item_condition: item.item_condition || '',
+      purchase_date: item.purchase_date ? item.purchase_date.split('T')[0] : '',
+      purchase_price: item.purchase_price?.toString() || '',
+      item_description: item.item_description || '',
+      is_active: item.is_active,
     });
     setIsModalOpen(true);
   };
@@ -182,31 +233,43 @@ const Items = () => {
     setIsDeleteOpen(true);
   };
 
-  const handleSubmit = () => {
-    console.log('Form submitted:', formData);
-    setIsModalOpen(false);
+  const handleSubmit = async () => {
+    setFormLoading(true);
+    try {
+      const submitData = {
+        ...formData,
+        category_item_id: formData.category_item_id ? parseInt(formData.category_item_id) : null,
+        room_id: formData.room_id ? parseInt(formData.room_id) : null,
+        item_quantity: formData.item_quantity ? parseInt(formData.item_quantity) : 0,
+        purchase_price: formData.purchase_price ? parseFloat(formData.purchase_price) : null,
+      };
+
+      if (selectedItem) {
+        await dispatch(updateItem({ id: selectedItem.item_id, data: submitData })).unwrap();
+      } else {
+        await dispatch(createItem(submitData)).unwrap();
+      }
+      setIsModalOpen(false);
+    } catch (err) {
+      // Error handled by slice
+    } finally {
+      setFormLoading(false);
+    }
   };
 
-  const handleConfirmDelete = () => {
-    console.log('Deleted:', selectedItem);
-    setIsDeleteOpen(false);
+  const handleConfirmDelete = async () => {
+    try {
+      await dispatch(deleteItem(selectedItem.item_id)).unwrap();
+      setIsDeleteOpen(false);
+    } catch (err) {
+      // Error handled by slice
+    }
   };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
-
-  // Filter data
-  const filteredData = data.filter((item) => {
-    const matchSearch =
-      item.name.toLowerCase().includes(searchValue.toLowerCase()) ||
-      item.code.toLowerCase().includes(searchValue.toLowerCase());
-    const matchCategory = !filterValues.category_id || item.category_id === filterValues.category_id;
-    const matchCondition = !filterValues.condition || item.condition === filterValues.condition;
-    const matchStatus = !filterValues.status || item.status === filterValues.status;
-    return matchSearch && matchCategory && matchCondition && matchStatus;
-  });
 
   return (
     <MainLayout>
@@ -233,15 +296,23 @@ const Items = () => {
         onExport={() => console.log('Export items')}
       />
 
-      <DataTable
-        columns={columns}
-        data={filteredData}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-        currentPage={currentPage}
-        totalPages={Math.ceil(filteredData.length / 10)}
-        onPageChange={setCurrentPage}
-      />
+      {items.loading ? (
+        <div className="flex items-center justify-center py-20">
+          <FiLoader className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={items.data}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+          currentPage={items.pagination.page}
+          totalPages={items.pagination.totalPages}
+          totalItems={items.pagination.total}
+          itemsPerPage={itemsPerPage}
+          onPageChange={setCurrentPage}
+        />
+      )}
 
       {/* Add/Edit Modal */}
       <Modal
@@ -250,20 +321,21 @@ const Items = () => {
         title={selectedItem ? 'Edit Item' : 'Tambah Item'}
         onSubmit={handleSubmit}
         size="lg"
+        loading={formLoading}
       >
         <div className="grid grid-cols-2 gap-4">
           <FormInput
             label="Kode Item"
-            name="code"
-            value={formData.code}
+            name="item_code"
+            value={formData.item_code}
             onChange={handleInputChange}
             placeholder="Contoh: ELK-001"
             required
           />
           <FormInput
             label="Nama Item"
-            name="name"
-            value={formData.name}
+            name="item_name"
+            value={formData.item_name}
             onChange={handleInputChange}
             placeholder="Masukkan nama item"
             required
@@ -272,11 +344,11 @@ const Items = () => {
         <div className="grid grid-cols-2 gap-4">
           <FormInput
             label="Kategori"
-            name="category_id"
+            name="category_item_id"
             type="select"
-            value={formData.category_id}
+            value={formData.category_item_id}
             onChange={handleInputChange}
-            options={categories}
+            options={categoryOptions}
             required
           />
           <FormInput
@@ -285,38 +357,38 @@ const Items = () => {
             type="select"
             value={formData.room_id}
             onChange={handleInputChange}
-            options={rooms}
+            options={roomOptions}
             required
           />
         </div>
         <div className="grid grid-cols-3 gap-4">
           <FormInput
             label="Jumlah"
-            name="quantity"
+            name="item_quantity"
             type="number"
-            value={formData.quantity}
+            value={formData.item_quantity}
             onChange={handleInputChange}
             placeholder="0"
             required
           />
           <FormInput
             label="Kondisi"
-            name="condition"
+            name="item_condition"
             type="select"
-            value={formData.condition}
+            value={formData.item_condition}
             onChange={handleInputChange}
             options={conditions}
             required
           />
           <FormInput
             label="Status"
-            name="status"
+            name="is_active"
             type="select"
-            value={formData.status}
-            onChange={handleInputChange}
+            value={formData.is_active?.toString()}
+            onChange={(e) => setFormData((prev) => ({ ...prev, is_active: parseInt(e.target.value) }))}
             options={[
-              { value: 'active', label: 'Aktif' },
-              { value: 'inactive', label: 'Nonaktif' },
+              { value: '1', label: 'Aktif' },
+              { value: '0', label: 'Nonaktif' },
             ]}
           />
         </div>
@@ -339,9 +411,9 @@ const Items = () => {
         </div>
         <FormInput
           label="Deskripsi"
-          name="description"
+          name="item_description"
           type="textarea"
-          value={formData.description}
+          value={formData.item_description}
           onChange={handleInputChange}
           placeholder="Deskripsi item"
         />
@@ -363,9 +435,10 @@ const Items = () => {
         onClose={() => setIsDeleteOpen(false)}
         onConfirm={handleConfirmDelete}
         title="Hapus Item"
-        message={`Apakah Anda yakin ingin menghapus "${selectedItem?.name}"?`}
+        message={`Apakah Anda yakin ingin menghapus "${selectedItem?.item_name}"?`}
         confirmText="Ya, Hapus"
         type="danger"
+        loading={items.loading}
       />
     </MainLayout>
   );

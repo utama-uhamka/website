@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
+import { toast } from 'react-hot-toast';
 import MainLayout from '../../layouts/MainLayout';
 import {
   DataTable,
   Modal,
   FormInput,
-  StatusBadge,
   PageHeader,
   ConfirmDialog,
 } from '../../components/ui';
@@ -14,106 +15,208 @@ import {
   FiMapPin,
   FiLayers,
   FiGrid,
-  FiUsers,
-  FiMaximize,
   FiPlus,
   FiBox,
   FiCheckCircle,
   FiAlertCircle,
   FiHome,
+  FiLoader,
 } from 'react-icons/fi';
+import {
+  fetchRoomById,
+  fetchCategoryItems,
+  clearMasterError,
+  clearMasterSuccess,
+} from '../../store/masterSlice';
+import {
+  fetchItems,
+  createItem,
+  updateItem,
+  deleteItem,
+  clearDataError,
+  clearDataSuccess,
+} from '../../store/dataSlice';
 
 const RoomDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const dispatch = useDispatch();
 
-  // Dummy room data
-  const roomData = {
-    id: parseInt(id),
-    name: 'Lobby Utama',
-    code: 'R101',
-    type: 'Lobby',
-    floor: 'Lantai 1',
-    floor_id: 1,
-    building: 'Gedung Rektorat',
-    building_id: 1,
-    unit: 'Unit A - Limau',
-    unit_id: 1,
-    capacity: 50,
-    area: '200 m²',
-    description: 'Lobby utama gedung rektorat untuk penerimaan tamu',
-    status: 'active',
-  };
+  // Redux state
+  const { categoryItems, loading: masterLoading, error: masterError, success: masterSuccess } = useSelector((state) => state.master);
+  const { items, loading: dataLoading, error: dataError, success: dataSuccess } = useSelector((state) => state.data);
+
+  // Local state for room detail
+  const [roomData, setRoomData] = useState(null);
+  const [roomLoading, setRoomLoading] = useState(true);
+
+  // Pagination state
+  const [itemPage, setItemPage] = useState(1);
+  const itemsPerPage = 10;
 
   // Item CRUD states
-  const [itemsData, setItemsData] = useState([
-    { id: 1, name: 'Sofa Tunggu 3-Seater', code: 'SF-001', category: 'Furniture', quantity: 4, condition: 'Baik', last_check: '2025-01-10' },
-    { id: 2, name: 'Meja Kopi', code: 'MK-001', category: 'Furniture', quantity: 2, condition: 'Baik', last_check: '2025-01-10' },
-    { id: 3, name: 'AC Standing 2PK', code: 'AC-003', category: 'Elektronik', quantity: 2, condition: 'Baik', last_check: '2025-01-08' },
-    { id: 4, name: 'Tanaman Hias Besar', code: 'TH-001', category: 'Dekorasi', quantity: 6, condition: 'Baik', last_check: '2025-01-15' },
-    { id: 5, name: 'Lampu Gantung', code: 'LG-001', category: 'Elektronik', quantity: 3, condition: 'Baik', last_check: '2025-01-05' },
-    { id: 6, name: 'Karpet Lantai', code: 'KP-001', category: 'Dekorasi', quantity: 2, condition: 'Cukup', last_check: '2025-01-12' },
-    { id: 7, name: 'TV LED 65"', code: 'TV-002', category: 'Elektronik', quantity: 1, condition: 'Baik', last_check: '2025-01-10' },
-    { id: 8, name: 'Dispenser Air', code: 'DP-002', category: 'Elektronik', quantity: 1, condition: 'Baik', last_check: '2025-01-08' },
-  ]);
   const [isItemModalOpen, setIsItemModalOpen] = useState(false);
   const [isItemDeleteOpen, setIsItemDeleteOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
-  const [itemForm, setItemForm] = useState({ name: '', code: '', category: '', quantity: '', condition: 'Baik', last_check: '' });
-
-  const categories = [
-    { value: 'Elektronik', label: 'Elektronik' },
-    { value: 'Furniture', label: 'Furniture' },
-    { value: 'Dekorasi', label: 'Dekorasi' },
-    { value: 'Alat Tulis', label: 'Alat Tulis' },
-    { value: 'Lainnya', label: 'Lainnya' },
-  ];
+  const [itemForm, setItemForm] = useState({
+    item_name: '',
+    item_code: '',
+    item_description: '',
+    category_item_id: '',
+    item_condition: 'Baik',
+    total: '',
+    brand: '',
+  });
+  const [itemFormLoading, setItemFormLoading] = useState(false);
 
   const conditions = [
     { value: 'Baik', label: 'Baik' },
-    { value: 'Cukup', label: 'Cukup' },
+    { value: 'Menunggu Diperbaiki', label: 'Menunggu Diperbaiki' },
+    { value: 'Diperbaiki', label: 'Diperbaiki' },
     { value: 'Rusak', label: 'Rusak' },
   ];
 
+  // Load room detail
+  const loadRoomDetail = useCallback(async () => {
+    setRoomLoading(true);
+    try {
+      const result = await dispatch(fetchRoomById(id)).unwrap();
+      setRoomData(result.data);
+    } catch (err) {
+      toast.error(err || 'Gagal memuat detail ruangan');
+      navigate(-1);
+    } finally {
+      setRoomLoading(false);
+    }
+  }, [dispatch, id, navigate]);
+
+  // Load items for this room
+  const loadItems = useCallback((page = itemPage) => {
+    if (roomData) {
+      dispatch(fetchItems({
+        campus_id: roomData.campus_id,
+        building_id: roomData.building_id,
+        floor_id: roomData.floor_id,
+        room_id: id,
+        page,
+        limit: itemsPerPage
+      }));
+    }
+  }, [dispatch, id, roomData, itemPage, itemsPerPage]);
+
+  // Load category items for dropdown
+  const loadCategoryItems = useCallback(() => {
+    dispatch(fetchCategoryItems({ limit: 100 }));
+  }, [dispatch]);
+
+  // Initial load
+  useEffect(() => {
+    loadRoomDetail();
+    loadCategoryItems();
+  }, [loadRoomDetail, loadCategoryItems]);
+
+  // Load items after roomData is available
+  useEffect(() => {
+    if (roomData) {
+      loadItems();
+    }
+  }, [roomData, loadItems]);
+
+  // Handle master errors and success
+  useEffect(() => {
+    if (masterError) {
+      toast.error(masterError);
+      dispatch(clearMasterError());
+    }
+    if (masterSuccess) {
+      toast.success(masterSuccess);
+      dispatch(clearMasterSuccess());
+    }
+  }, [masterError, masterSuccess, dispatch]);
+
+  // Handle data errors and success
+  useEffect(() => {
+    if (dataError) {
+      toast.error(dataError);
+      dispatch(clearDataError());
+    }
+    if (dataSuccess) {
+      toast.success(dataSuccess);
+      dispatch(clearDataSuccess());
+    }
+  }, [dataError, dataSuccess, dispatch]);
+
+  // Data arrays and pagination
+  const itemsData = items.data || [];
+  const itemsPagination = items.pagination || { total: 0, page: 1, limit: 10, totalPages: 0 };
+
+  // Handle page change
+  const handleItemPageChange = (newPage) => {
+    setItemPage(newPage);
+    loadItems(newPage);
+  };
+
+  // Category options for dropdown
+  const categoryOptions = (categoryItems.data || []).map(c => ({
+    value: c.category_item_id,
+    label: c.category_item_name
+  }));
+
   // Column definitions
   const itemColumns = [
-    { key: 'code', label: 'Kode', width: '100px' },
-    { key: 'name', label: 'Nama Item' },
-    { key: 'category', label: 'Kategori', width: '120px' },
-    { key: 'quantity', label: 'Jumlah', width: '80px' },
+    { key: 'item_code', label: 'Kode', width: '120px' },
+    { key: 'item_name', label: 'Nama Item' },
     {
-      key: 'condition',
+      key: 'category_item',
+      label: 'Kategori',
+      width: '120px',
+      render: (v, row) => row.category_item?.category_item_name || '-',
+    },
+    { key: 'total', label: 'Jumlah', width: '80px' },
+    {
+      key: 'item_condition',
       label: 'Kondisi',
       width: '100px',
       render: (v) => (
         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
           v === 'Baik' ? 'bg-green-100 text-green-700' :
-          v === 'Cukup' ? 'bg-yellow-100 text-yellow-700' :
-          'bg-red-100 text-red-700'
+          v === 'Diperbaiki' ? 'bg-blue-100 text-blue-700' :
+          v === 'Menunggu Diperbaiki' ? 'bg-yellow-100 text-yellow-700' :
+          v === 'Rusak' ? 'bg-red-100 text-red-700' :
+          'bg-gray-100 text-gray-700'
         }`}>
-          {v}
+          {v || '-'}
         </span>
-      )
+      ),
     },
-    { key: 'last_check', label: 'Cek Terakhir', width: '120px' },
+    { key: 'brand', label: 'Merk', width: '100px', render: (v) => v || '-' },
   ];
 
   // Item handlers
   const handleAddItem = () => {
     setSelectedItem(null);
-    setItemForm({ name: '', code: '', category: '', quantity: '', condition: 'Baik', last_check: '' });
+    setItemForm({
+      item_name: '',
+      item_code: '',
+      item_description: '',
+      category_item_id: '',
+      item_condition: 'Baik',
+      total: '',
+      brand: '',
+    });
     setIsItemModalOpen(true);
   };
 
   const handleEditItem = (item) => {
     setSelectedItem(item);
     setItemForm({
-      name: item.name,
-      code: item.code,
-      category: item.category,
-      quantity: item.quantity,
-      condition: item.condition,
-      last_check: item.last_check,
+      item_name: item.item_name || '',
+      item_code: item.item_code || '',
+      item_description: item.item_description || '',
+      category_item_id: item.category_item_id?.toString() || '',
+      item_condition: item.item_condition || 'Baik',
+      total: item.total?.toString() || '',
+      brand: item.brand || '',
     });
     setIsItemModalOpen(true);
   };
@@ -123,34 +226,78 @@ const RoomDetail = () => {
     setIsItemDeleteOpen(true);
   };
 
-  const handleItemSubmit = () => {
-    if (selectedItem) {
-      setItemsData((prev) =>
-        prev.map((item) => (item.id === selectedItem.id ? { ...item, ...itemForm } : item))
-      );
-    } else {
-      setItemsData((prev) => [...prev, { id: Date.now(), ...itemForm }]);
+  const handleItemSubmit = async () => {
+    setItemFormLoading(true);
+    try {
+      const itemData = {
+        ...itemForm,
+        campus_id: roomData?.campus_id ? parseInt(roomData.campus_id) : null,
+        building_id: roomData?.building_id ? parseInt(roomData.building_id) : null,
+        floor_id: roomData?.floor_id ? parseInt(roomData.floor_id) : null,
+        room_id: parseInt(id),
+        total: itemForm.total ? parseInt(itemForm.total) : null,
+        category_item_id: itemForm.category_item_id ? parseInt(itemForm.category_item_id) : null,
+      };
+      if (selectedItem) {
+        await dispatch(updateItem({ id: selectedItem.item_id, data: itemData })).unwrap();
+      } else {
+        await dispatch(createItem(itemData)).unwrap();
+      }
+      setIsItemModalOpen(false);
+      loadItems();
+    } catch (err) {
+      // Error handled by effect
+    } finally {
+      setItemFormLoading(false);
     }
-    setIsItemModalOpen(false);
   };
 
-  const handleConfirmDeleteItem = () => {
-    setItemsData((prev) => prev.filter((item) => item.id !== selectedItem.id));
-    setIsItemDeleteOpen(false);
+  const handleConfirmDeleteItem = async () => {
+    try {
+      await dispatch(deleteItem(selectedItem.item_id)).unwrap();
+      setIsItemDeleteOpen(false);
+      loadItems();
+    } catch (err) {
+      // Error handled by effect
+    }
   };
+
+  // Calculate stats
+  const goodConditionItems = itemsData.filter(i => i.item_condition === 'Baik').length;
+  const needAttentionItems = itemsData.filter(i => i.item_condition !== 'Baik').length;
+
+  if (roomLoading) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center min-h-96">
+          <FiLoader className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </MainLayout>
+    );
+  }
+
+  if (!roomData) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center min-h-96">
+          <p className="text-gray-500">Ruangan tidak ditemukan</p>
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout>
       <PageHeader
-        title={roomData.name}
+        title={roomData.room_name}
         subtitle="Detail informasi ruangan"
         breadcrumbs={[
           { label: 'Dashboard', path: '/dashboard' },
           { label: 'Unit', path: '/master/units' },
-          { label: roomData.unit, path: `/master/units/${roomData.unit_id}` },
-          { label: roomData.building, path: `/master/buildings/${roomData.building_id}` },
-          { label: roomData.floor, path: `/master/floors/${roomData.floor_id}` },
-          { label: roomData.name },
+          { label: roomData.campus_name || 'Unit', path: `/master/units/${roomData.campus_id}` },
+          { label: roomData.building_name || 'Gedung', path: `/master/buildings/${roomData.building_id}` },
+          { label: roomData.floor_name || 'Lantai', path: `/master/floors/${roomData.floor_id}` },
+          { label: roomData.room_name },
         ]}
         actions={
           <button
@@ -177,24 +324,18 @@ const RoomDetail = () => {
           <div className="flex-1">
             <div className="flex items-start justify-between mb-4">
               <div>
-                <div className="flex items-center gap-3">
-                  <h2 className="text-2xl font-bold text-gray-800">{roomData.name}</h2>
-                  <span className="px-3 py-1 bg-green-100 text-green-700 text-sm font-medium rounded-full">{roomData.code}</span>
-                  <span className="px-3 py-1 bg-gray-100 text-gray-600 text-sm font-medium rounded-full">{roomData.type}</span>
-                </div>
-                <p className="text-gray-500 mt-1">{roomData.description}</p>
+                <h2 className="text-2xl font-bold text-gray-800">{roomData.room_name}</h2>
               </div>
-              <StatusBadge status={roomData.status} />
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-100 shadow-sm">
                 <div className="p-2 bg-primary/10 rounded-lg">
                   <FiMapPin className="w-4 h-4 text-primary" />
                 </div>
                 <div className="min-w-0">
                   <span className="text-xs text-gray-500">Unit</span>
-                  <p className="font-medium text-sm truncate">{roomData.unit}</p>
+                  <p className="font-medium text-sm truncate">{roomData.campus_name}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-100 shadow-sm">
@@ -203,7 +344,7 @@ const RoomDetail = () => {
                 </div>
                 <div className="min-w-0">
                   <span className="text-xs text-gray-500">Gedung</span>
-                  <p className="font-medium text-sm truncate">{roomData.building}</p>
+                  <p className="font-medium text-sm truncate">{roomData.building_name}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-100 shadow-sm">
@@ -212,16 +353,7 @@ const RoomDetail = () => {
                 </div>
                 <div className="min-w-0">
                   <span className="text-xs text-gray-500">Lantai</span>
-                  <p className="font-medium text-sm">{roomData.floor}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-100 shadow-sm">
-                <div className="p-2 bg-amber-100 rounded-lg">
-                  <FiUsers className="w-4 h-4 text-amber-600" />
-                </div>
-                <div className="min-w-0">
-                  <span className="text-xs text-gray-500">Kapasitas</span>
-                  <p className="font-medium text-sm">{roomData.capacity} orang</p>
+                  <p className="font-medium text-sm">{roomData.floor_name}</p>
                 </div>
               </div>
             </div>
@@ -230,18 +362,7 @@ const RoomDetail = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-5">
-          <div className="flex items-center gap-4">
-            <div className="bg-blue-500 p-3 rounded-xl shadow">
-              <FiMaximize className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-800">{roomData.area}</p>
-              <p className="text-sm text-gray-500">Luas Ruangan</p>
-            </div>
-          </div>
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-5">
           <div className="flex items-center gap-4">
             <div className="bg-green-500 p-3 rounded-xl shadow">
@@ -259,7 +380,7 @@ const RoomDetail = () => {
               <FiCheckCircle className="w-6 h-6 text-white" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-gray-800">{itemsData.filter(i => i.condition === 'Baik').length}</p>
+              <p className="text-2xl font-bold text-gray-800">{goodConditionItems}</p>
               <p className="text-sm text-gray-500">Kondisi Baik</p>
             </div>
           </div>
@@ -270,7 +391,7 @@ const RoomDetail = () => {
               <FiAlertCircle className="w-6 h-6 text-white" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-gray-800">{itemsData.filter(i => i.condition !== 'Baik').length}</p>
+              <p className="text-2xl font-bold text-gray-800">{needAttentionItems}</p>
               <p className="text-sm text-gray-500">Perlu Perhatian</p>
             </div>
           </div>
@@ -292,10 +413,16 @@ const RoomDetail = () => {
         <DataTable
           columns={itemColumns}
           data={itemsData}
+          loading={dataLoading}
           onEdit={handleEditItem}
           onDelete={handleDeleteItem}
           showActions={true}
           actionColumn={{ view: false, edit: true, delete: true }}
+          currentPage={itemsPagination.page}
+          totalPages={itemsPagination.totalPages}
+          totalItems={itemsPagination.total}
+          itemsPerPage={itemsPerPage}
+          onPageChange={handleItemPageChange}
         />
       </div>
 
@@ -305,21 +432,22 @@ const RoomDetail = () => {
         onClose={() => setIsItemModalOpen(false)}
         title={selectedItem ? 'Edit Item' : 'Tambah Item'}
         onSubmit={handleItemSubmit}
+        loading={itemFormLoading}
       >
         <div className="grid grid-cols-2 gap-4">
           <FormInput
             label="Kode Item"
-            name="code"
-            value={itemForm.code}
-            onChange={(e) => setItemForm({ ...itemForm, code: e.target.value })}
-            placeholder="Contoh: SF-001"
+            name="item_code"
+            value={itemForm.item_code}
+            onChange={(e) => setItemForm({ ...itemForm, item_code: e.target.value })}
+            placeholder="Contoh: ITM-001"
             required
           />
           <FormInput
             label="Nama Item"
-            name="name"
-            value={itemForm.name}
-            onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })}
+            name="item_name"
+            value={itemForm.item_name}
+            onChange={(e) => setItemForm({ ...itemForm, item_name: e.target.value })}
             placeholder="Contoh: Sofa Tunggu"
             required
           />
@@ -327,19 +455,18 @@ const RoomDetail = () => {
         <div className="grid grid-cols-2 gap-4">
           <FormInput
             label="Kategori"
-            name="category"
+            name="category_item_id"
             type="select"
-            value={itemForm.category}
-            onChange={(e) => setItemForm({ ...itemForm, category: e.target.value })}
-            options={categories}
-            required
+            value={itemForm.category_item_id}
+            onChange={(e) => setItemForm({ ...itemForm, category_item_id: e.target.value })}
+            options={[{ value: '', label: 'Pilih Kategori' }, ...categoryOptions]}
           />
           <FormInput
             label="Jumlah"
-            name="quantity"
+            name="total"
             type="number"
-            value={itemForm.quantity}
-            onChange={(e) => setItemForm({ ...itemForm, quantity: e.target.value })}
+            value={itemForm.total}
+            onChange={(e) => setItemForm({ ...itemForm, total: e.target.value })}
             placeholder="Contoh: 4"
             required
           />
@@ -347,20 +474,27 @@ const RoomDetail = () => {
         <div className="grid grid-cols-2 gap-4">
           <FormInput
             label="Kondisi"
-            name="condition"
+            name="item_condition"
             type="select"
-            value={itemForm.condition}
-            onChange={(e) => setItemForm({ ...itemForm, condition: e.target.value })}
+            value={itemForm.item_condition}
+            onChange={(e) => setItemForm({ ...itemForm, item_condition: e.target.value })}
             options={conditions}
           />
           <FormInput
-            label="Tanggal Cek Terakhir"
-            name="last_check"
-            type="date"
-            value={itemForm.last_check}
-            onChange={(e) => setItemForm({ ...itemForm, last_check: e.target.value })}
+            label="Merk"
+            name="brand"
+            value={itemForm.brand}
+            onChange={(e) => setItemForm({ ...itemForm, brand: e.target.value })}
+            placeholder="Contoh: Samsung"
           />
         </div>
+        <FormInput
+          label="Deskripsi"
+          name="item_description"
+          value={itemForm.item_description}
+          onChange={(e) => setItemForm({ ...itemForm, item_description: e.target.value })}
+          placeholder="Deskripsi item (opsional)"
+        />
       </Modal>
 
       {/* Item Delete Confirmation */}
@@ -369,7 +503,7 @@ const RoomDetail = () => {
         onClose={() => setIsItemDeleteOpen(false)}
         onConfirm={handleConfirmDeleteItem}
         title="Hapus Item"
-        message={`Apakah Anda yakin ingin menghapus "${selectedItem?.name}"?`}
+        message={`Apakah Anda yakin ingin menghapus "${selectedItem?.item_name}"?`}
         confirmText="Ya, Hapus"
         type="danger"
       />

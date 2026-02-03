@@ -1,79 +1,107 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
+import { toast } from 'react-hot-toast';
 import MainLayout from '../../layouts/MainLayout';
 import {
   DataTable,
   Modal,
   SearchFilter,
   FormInput,
-  StatusBadge,
   ConfirmDialog,
   PageHeader,
 } from '../../components/ui';
+import { FiLoader, FiUpload, FiX, FiImage } from 'react-icons/fi';
+import {
+  fetchRooms,
+  createRoom,
+  updateRoom,
+  deleteRoom,
+  clearMasterError,
+  clearMasterSuccess,
+  fetchFloors,
+} from '../../store/masterSlice';
+import { convertToWebP, validateImageFile } from '../../utils/imageUtils';
 
 const Rooms = () => {
   const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const { rooms, floors } = useSelector((state) => state.master);
+
   const [searchValue, setSearchValue] = useState('');
   const [filterValues, setFilterValues] = useState({});
   const [currentPage, setCurrentPage] = useState(1);
-  const [sortColumn, setSortColumn] = useState('code');
-  const [sortDirection, setSortDirection] = useState('asc');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [formLoading, setFormLoading] = useState(false);
   const [formData, setFormData] = useState({
-    name: '',
-    code: '',
+    room_name: '',
     floor_id: '',
-    capacity: '',
-    type: '',
-    status: 'active',
   });
+
+  // Image states
+  const [photoFile, setPhotoFile] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState('');
+  const [imageLoading, setImageLoading] = useState(false);
+  const photoInputRef = useRef(null);
 
   const itemsPerPage = 10;
 
-  // Dummy data
-  const floors = [
-    { value: '1', label: 'Lantai 1 - Gedung Rektorat' },
-    { value: '2', label: 'Lantai 2 - Gedung Rektorat' },
-    { value: '3', label: 'Lantai 1 - Gedung FKIP' },
-    { value: '4', label: 'Lantai 2 - Gedung FKIP' },
-  ];
+  // Load rooms
+  const loadRooms = useCallback(() => {
+    const params = {
+      page: currentPage,
+      limit: itemsPerPage,
+      search: searchValue,
+      ...filterValues,
+    };
+    dispatch(fetchRooms(params));
+  }, [dispatch, currentPage, itemsPerPage, searchValue, filterValues]);
 
-  const roomTypes = [
-    { value: 'classroom', label: 'Ruang Kelas' },
-    { value: 'lab', label: 'Laboratorium' },
-    { value: 'office', label: 'Kantor' },
-    { value: 'meeting', label: 'Ruang Rapat' },
-    { value: 'other', label: 'Lainnya' },
-  ];
+  useEffect(() => {
+    loadRooms();
+  }, [loadRooms]);
 
-  const allData = [
-    { id: 1, name: 'Ruang 101', code: 'R-101', floor: 'Lt. 1 - Ged. Rektorat', floor_id: '1', capacity: 40, type: 'classroom', type_label: 'Ruang Kelas', status: 'active' },
-    { id: 2, name: 'Ruang 102', code: 'R-102', floor: 'Lt. 1 - Ged. Rektorat', floor_id: '1', capacity: 30, type: 'classroom', type_label: 'Ruang Kelas', status: 'active' },
-    { id: 3, name: 'Lab Komputer', code: 'LAB-01', floor: 'Lt. 2 - Ged. Rektorat', floor_id: '2', capacity: 50, type: 'lab', type_label: 'Laboratorium', status: 'active' },
-    { id: 4, name: 'Ruang Rapat A', code: 'MTG-A', floor: 'Lt. 2 - Ged. Rektorat', floor_id: '2', capacity: 20, type: 'meeting', type_label: 'Ruang Rapat', status: 'active' },
-    { id: 5, name: 'Kantor Dosen', code: 'OFF-01', floor: 'Lt. 1 - Ged. FKIP', floor_id: '3', capacity: 10, type: 'office', type_label: 'Kantor', status: 'active' },
-    { id: 6, name: 'Ruang 201', code: 'R-201', floor: 'Lt. 2 - Ged. FKIP', floor_id: '4', capacity: 45, type: 'classroom', type_label: 'Ruang Kelas', status: 'active' },
-    { id: 7, name: 'Gudang', code: 'GDG-01', floor: 'Lt. 1 - Ged. Rektorat', floor_id: '1', capacity: 0, type: 'other', type_label: 'Lainnya', status: 'inactive' },
-    { id: 8, name: 'Lab Bahasa', code: 'LAB-02', floor: 'Lt. 2 - Ged. FKIP', floor_id: '4', capacity: 35, type: 'lab', type_label: 'Laboratorium', status: 'active' },
-    { id: 9, name: 'Ruang 103', code: 'R-103', floor: 'Lt. 1 - Ged. Rektorat', floor_id: '1', capacity: 35, type: 'classroom', type_label: 'Ruang Kelas', status: 'active' },
-    { id: 10, name: 'Ruang Rapat B', code: 'MTG-B', floor: 'Lt. 2 - Ged. Rektorat', floor_id: '2', capacity: 15, type: 'meeting', type_label: 'Ruang Rapat', status: 'active' },
-    { id: 11, name: 'Kantor Admin', code: 'OFF-02', floor: 'Lt. 1 - Ged. Rektorat', floor_id: '1', capacity: 8, type: 'office', type_label: 'Kantor', status: 'active' },
-    { id: 12, name: 'Ruang Server', code: 'SRV-01', floor: 'Lt. 2 - Ged. Rektorat', floor_id: '2', capacity: 5, type: 'other', type_label: 'Lainnya', status: 'active' },
-  ];
+  // Load floors for dropdown
+  useEffect(() => {
+    dispatch(fetchFloors({ limit: 100 }));
+  }, [dispatch]);
+
+  // Handle success/error messages
+  useEffect(() => {
+    if (rooms.error) {
+      toast.error(rooms.error);
+      dispatch(clearMasterError());
+    }
+  }, [rooms.error, dispatch]);
+
+  useEffect(() => {
+    if (rooms.success) {
+      toast.success(rooms.success);
+      dispatch(clearMasterSuccess());
+      loadRooms();
+    }
+  }, [rooms.success, dispatch, loadRooms]);
+
+  // Reset page when search/filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchValue, filterValues]);
+
+  // Convert floors to options
+  const floorOptions = floors.data.map((f) => ({
+    value: f.floor_id?.toString(),
+    label: `${f.floor_name} - ${f.building?.building_name || ''}`,
+  }));
 
   const columns = [
-    { key: 'code', label: 'Kode', width: '100px' },
-    { key: 'name', label: 'Nama Ruangan' },
-    { key: 'floor', label: 'Lantai' },
-    { key: 'type_label', label: 'Tipe', width: '120px' },
-    { key: 'capacity', label: 'Kapasitas', width: '100px' },
+    { key: 'room_id', label: 'ID', width: '120px' },
+    { key: 'room_name', label: 'Nama Ruangan' },
     {
-      key: 'status',
-      label: 'Status',
-      width: '100px',
-      render: (value) => <StatusBadge status={value} />,
+      key: 'floor',
+      label: 'Lantai',
+      render: (value, item) => item.floor?.floor_name || '-',
     },
   ];
 
@@ -81,83 +109,37 @@ const Rooms = () => {
     {
       key: 'floor_id',
       label: 'Lantai',
-      options: floors,
-    },
-    {
-      key: 'type',
-      label: 'Tipe',
-      options: roomTypes,
-    },
-    {
-      key: 'status',
-      label: 'Status',
-      options: [
-        { value: 'active', label: 'Aktif' },
-        { value: 'inactive', label: 'Nonaktif' },
-      ],
+      options: floorOptions,
     },
   ];
-
-  // Filter, sort, and paginate data
-  const { paginatedData, totalItems, totalPages } = useMemo(() => {
-    let filtered = allData.filter((item) => {
-      const matchSearch =
-        item.name.toLowerCase().includes(searchValue.toLowerCase()) ||
-        item.code.toLowerCase().includes(searchValue.toLowerCase());
-      const matchFloor = !filterValues.floor_id || item.floor_id === filterValues.floor_id;
-      const matchType = !filterValues.type || item.type === filterValues.type;
-      const matchStatus = !filterValues.status || item.status === filterValues.status;
-      return matchSearch && matchFloor && matchType && matchStatus;
-    });
-
-    filtered.sort((a, b) => {
-      const aVal = a[sortColumn] || '';
-      const bVal = b[sortColumn] || '';
-      if (typeof aVal === 'number' && typeof bVal === 'number') {
-        return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
-      }
-      return sortDirection === 'asc'
-        ? aVal.toString().localeCompare(bVal.toString())
-        : bVal.toString().localeCompare(aVal.toString());
-    });
-
-    const total = filtered.length;
-    const pages = Math.ceil(total / itemsPerPage);
-    const start = (currentPage - 1) * itemsPerPage;
-    const paginated = filtered.slice(start, start + itemsPerPage);
-
-    return { paginatedData: paginated, totalItems: total, totalPages: pages };
-  }, [allData, searchValue, filterValues, sortColumn, sortDirection, currentPage]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchValue, filterValues]);
 
   const handleFilterChange = (key, value) => {
     setFilterValues((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleSort = (column, direction) => {
-    setSortColumn(column);
-    setSortDirection(direction);
+  const resetForm = () => {
+    setFormData({
+      room_name: '',
+      floor_id: '',
+    });
+    setPhotoFile(null);
+    setPhotoPreview('');
   };
 
   const handleAdd = () => {
     setSelectedItem(null);
-    setFormData({ name: '', code: '', floor_id: '', capacity: '', type: '', status: 'active' });
+    resetForm();
     setIsModalOpen(true);
   };
 
   const handleEdit = (item) => {
     setSelectedItem(item);
     setFormData({
-      name: item.name,
-      code: item.code,
-      floor_id: item.floor_id,
-      capacity: item.capacity,
-      type: item.type,
-      status: item.status,
+      room_name: item.room_name || '',
+      floor_id: item.floor_id?.toString() || '',
     });
+    setPhotoPreview(item.photo_1 || '');
+    setPhotoFile(null);
     setIsModalOpen(true);
   };
 
@@ -167,23 +149,161 @@ const Rooms = () => {
   };
 
   const handleView = (item) => {
-    navigate(`/master/rooms/${item.id}`);
+    navigate(`/master/rooms/${item.room_id}`);
   };
 
-  const handleSubmit = () => {
-    console.log('Form submitted:', formData);
-    setIsModalOpen(false);
+  // Handle file selection and convert to WebP
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validation = validateImageFile(file, 5);
+    if (!validation.valid) {
+      toast.error(validation.error);
+      return;
+    }
+
+    setImageLoading(true);
+    try {
+      const webpBlob = await convertToWebP(file, 0.8);
+      const webpFile = new File([webpBlob], `photo_${Date.now()}.webp`, { type: 'image/webp' });
+      const previewUrl = URL.createObjectURL(webpBlob);
+
+      setPhotoFile(webpFile);
+      setPhotoPreview(previewUrl);
+      toast.success('Gambar berhasil dikonversi ke WebP');
+    } catch (err) {
+      toast.error(err.message || 'Gagal memproses gambar');
+    } finally {
+      setImageLoading(false);
+    }
   };
 
-  const handleConfirmDelete = () => {
-    console.log('Deleted:', selectedItem);
-    setIsDeleteOpen(false);
+  const removeImage = () => {
+    setPhotoFile(null);
+    setPhotoPreview('');
+    if (photoInputRef.current) photoInputRef.current.value = '';
+  };
+
+  const validateForm = () => {
+    if (!formData.floor_id) {
+      toast.error('Lantai wajib dipilih');
+      return false;
+    }
+    if (!formData.room_name.trim()) {
+      toast.error('Nama ruangan wajib diisi');
+      return false;
+    }
+    if (!selectedItem && !photoFile) {
+      toast.error('Foto ruangan wajib diupload');
+      return false;
+    }
+    if (selectedItem && !photoFile && !photoPreview) {
+      toast.error('Foto ruangan wajib diupload');
+      return false;
+    }
+    return true;
+  };
+
+  const handleSubmit = async () => {
+    if (!validateForm()) return;
+
+    setFormLoading(true);
+    try {
+      const submitData = new FormData();
+      submitData.append('room_name', formData.room_name);
+      submitData.append('floor_id', formData.floor_id);
+
+      if (photoFile) {
+        submitData.append('photo_1', photoFile);
+      }
+
+      if (selectedItem) {
+        await dispatch(updateRoom({ id: selectedItem.room_id, data: submitData })).unwrap();
+      } else {
+        await dispatch(createRoom(submitData)).unwrap();
+      }
+      setIsModalOpen(false);
+      resetForm();
+    } catch (err) {
+      // Error handled by slice
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    try {
+      await dispatch(deleteRoom(selectedItem.room_id)).unwrap();
+      setIsDeleteOpen(false);
+    } catch (err) {
+      // Error handled by slice
+    }
   };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
+
+  // Image Upload Component
+  const ImageUpload = () => (
+    <div className="space-y-2">
+      <label className="block text-sm font-medium text-gray-700">
+        Foto Ruangan <span className="text-red-500">*</span>
+      </label>
+      <div className="relative">
+        {photoPreview ? (
+          <div className="relative group">
+            <img
+              src={photoPreview}
+              alt="Preview"
+              className="w-full h-40 object-cover rounded-lg border border-gray-200"
+            />
+            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => photoInputRef.current?.click()}
+                className="p-2 bg-white rounded-full text-gray-700 hover:bg-gray-100"
+              >
+                <FiUpload size={16} />
+              </button>
+              <button
+                type="button"
+                onClick={removeImage}
+                className="p-2 bg-red-500 rounded-full text-white hover:bg-red-600"
+              >
+                <FiX size={16} />
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div
+            onClick={() => photoInputRef.current?.click()}
+            className="w-full h-40 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-primary hover:bg-primary/5 transition-colors"
+          >
+            {imageLoading ? (
+              <FiLoader className="w-8 h-8 animate-spin text-primary" />
+            ) : (
+              <>
+                <FiImage className="w-8 h-8 text-gray-400 mb-2" />
+                <p className="text-sm text-gray-500">Klik untuk upload</p>
+                <p className="text-xs text-gray-400">JPG, PNG, GIF (max 5MB)</p>
+              </>
+            )}
+          </div>
+        )}
+        <input
+          ref={photoInputRef}
+          type="file"
+          accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+          onChange={handleFileChange}
+          className="hidden"
+        />
+      </div>
+      <p className="text-xs text-gray-500">Gambar akan otomatis dikonversi ke format WebP</p>
+    </div>
+  );
 
   return (
     <MainLayout>
@@ -200,7 +320,7 @@ const Rooms = () => {
       <SearchFilter
         searchValue={searchValue}
         onSearchChange={setSearchValue}
-        searchPlaceholder="Cari nama atau kode ruangan..."
+        searchPlaceholder="Cari nama ruangan..."
         filters={filters}
         filterValues={filterValues}
         onFilterChange={handleFilterChange}
@@ -208,22 +328,25 @@ const Rooms = () => {
         addLabel="Tambah Ruangan"
       />
 
-      <DataTable
-        columns={columns}
-        data={paginatedData}
-        onView={handleView}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-        currentPage={currentPage}
-        totalPages={totalPages}
-        totalItems={totalItems}
-        itemsPerPage={itemsPerPage}
-        onPageChange={setCurrentPage}
-        onSort={handleSort}
-        sortColumn={sortColumn}
-        sortDirection={sortDirection}
-        actionColumn={{ view: true, edit: true, delete: true }}
-      />
+      {rooms.loading ? (
+        <div className="flex items-center justify-center py-20">
+          <FiLoader className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={rooms.data}
+          onView={handleView}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+          currentPage={rooms.pagination.page}
+          totalPages={rooms.pagination.totalPages}
+          totalItems={rooms.pagination.total}
+          itemsPerPage={itemsPerPage}
+          onPageChange={setCurrentPage}
+          actionColumn={{ view: true, edit: true, delete: true }}
+        />
+      )}
 
       {/* Add/Edit Modal */}
       <Modal
@@ -231,6 +354,7 @@ const Rooms = () => {
         onClose={() => setIsModalOpen(false)}
         title={selectedItem ? 'Edit Ruangan' : 'Tambah Ruangan'}
         onSubmit={handleSubmit}
+        loading={formLoading}
       >
         <FormInput
           label="Lantai"
@@ -238,57 +362,18 @@ const Rooms = () => {
           type="select"
           value={formData.floor_id}
           onChange={handleInputChange}
-          options={floors}
+          options={floorOptions}
           required
         />
-        <div className="grid grid-cols-2 gap-4">
-          <FormInput
-            label="Kode Ruangan"
-            name="code"
-            value={formData.code}
-            onChange={handleInputChange}
-            placeholder="Contoh: R-101"
-            required
-          />
-          <FormInput
-            label="Nama Ruangan"
-            name="name"
-            value={formData.name}
-            onChange={handleInputChange}
-            placeholder="Contoh: Ruang 101"
-            required
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <FormInput
-            label="Tipe Ruangan"
-            name="type"
-            type="select"
-            value={formData.type}
-            onChange={handleInputChange}
-            options={roomTypes}
-            required
-          />
-          <FormInput
-            label="Kapasitas"
-            name="capacity"
-            type="number"
-            value={formData.capacity}
-            onChange={handleInputChange}
-            placeholder="Contoh: 40"
-          />
-        </div>
         <FormInput
-          label="Status"
-          name="status"
-          type="select"
-          value={formData.status}
+          label="Nama Ruangan"
+          name="room_name"
+          value={formData.room_name}
           onChange={handleInputChange}
-          options={[
-            { value: 'active', label: 'Aktif' },
-            { value: 'inactive', label: 'Nonaktif' },
-          ]}
+          placeholder="Contoh: Ruang 101"
+          required
         />
+        <ImageUpload />
       </Modal>
 
       {/* Delete Confirmation */}
@@ -297,9 +382,10 @@ const Rooms = () => {
         onClose={() => setIsDeleteOpen(false)}
         onConfirm={handleConfirmDelete}
         title="Hapus Ruangan"
-        message={`Apakah Anda yakin ingin menghapus "${selectedItem?.name}"? Tindakan ini tidak dapat dibatalkan.`}
+        message={`Apakah Anda yakin ingin menghapus "${selectedItem?.room_name}"? Tindakan ini tidak dapat dibatalkan.`}
         confirmText="Ya, Hapus"
         type="danger"
+        loading={rooms.loading}
       />
     </MainLayout>
   );

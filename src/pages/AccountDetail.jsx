@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
+import { toast } from 'react-hot-toast';
 import MainLayout from '../layouts/MainLayout';
 import {
   DataTable,
@@ -27,12 +29,36 @@ import {
   FiBook,
   FiAward,
   FiCheck,
+  FiLoader,
 } from 'react-icons/fi';
+import { fetchUserById, updateUser, clearUsersError, clearUsersSuccess } from '../store/usersSlice';
+import {
+  fetchAttendances,
+  fetchActivities,
+  fetchLeaves,
+  fetchEvaluations,
+  createEvaluation,
+  updateEvaluation,
+  deleteEvaluation,
+  fetchTrainings,
+  clearDataError,
+  clearDataSuccess,
+} from '../store/dataSlice';
+import { fetchShifts, clearMasterError, clearMasterSuccess } from '../store/masterSlice';
 
 const AccountDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const dispatch = useDispatch();
   const [activeTab, setActiveTab] = useState('informasi');
+
+  // Redux state
+  const { selectedUser, loading: usersLoading, error: usersError, success: usersSuccess } = useSelector((state) => state.users);
+  const { attendances, activities, leaves, evaluations, trainings, loading: dataLoading, error: dataError, success: dataSuccess } = useSelector((state) => state.data);
+  const { shifts, error: masterError, success: masterSuccess } = useSelector((state) => state.master);
+
+  // Local loading state
+  const [pageLoading, setPageLoading] = useState(true);
 
   // Password form
   const [passwordData, setPasswordData] = useState({
@@ -40,17 +66,12 @@ const AccountDetail = () => {
     new_password: '',
     confirm_password: '',
   });
+  const [passwordLoading, setPasswordLoading] = useState(false);
 
   // Shift management
   const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
   const [shiftForm, setShiftForm] = useState({ shift_id: '' });
-
-  // Training data
-  const trainingData = [
-    { id: 1, name: 'Training Keamanan Gedung', date: '2024-11-15', duration: '2 hari', status: 'completed', certificate: true },
-    { id: 2, name: 'Workshop Customer Service', date: '2024-09-20', duration: '1 hari', status: 'completed', certificate: true },
-    { id: 3, name: 'Training First Aid', date: '2025-02-10', duration: '1 hari', status: 'upcoming', certificate: false },
-  ];
+  const [shiftLoading, setShiftLoading] = useState(false);
 
   // Evaluation modal
   const [isEvalModalOpen, setIsEvalModalOpen] = useState(false);
@@ -65,36 +86,7 @@ const AccountDetail = () => {
     skill_score: '',
     notes: '',
   });
-
-  // Dummy user data
-  const [userData, setUserData] = useState({
-    id: parseInt(id),
-    name: 'Ahmad Fauzi',
-    email: 'ahmad.fauzi@uhamka.ac.id',
-    phone: '08123456789',
-    role: 'Admin',
-    shift_id: '1',
-    shift: 'Shift Pagi',
-    shift_time: '07:00 - 15:00',
-    unit: 'Unit A - Limau',
-    unit_id: 1,
-    building: 'Gedung Rektorat',
-    join_date: '2023-01-15',
-    status: 'active',
-    avatar: null,
-  });
-
-  const shifts = [
-    { value: '1', label: 'Shift Pagi (07:00 - 15:00)' },
-    { value: '2', label: 'Shift Siang (14:00 - 22:00)' },
-    { value: '3', label: 'Shift Malam (22:00 - 07:00)' },
-  ];
-
-  const shiftDetails = {
-    '1': { name: 'Shift Pagi', start: '07:00', end: '15:00', break: '12:00 - 13:00' },
-    '2': { name: 'Shift Siang', start: '14:00', end: '22:00', break: '18:00 - 19:00' },
-    '3': { name: 'Shift Malam', start: '22:00', end: '07:00', break: '02:00 - 03:00' },
-  };
+  const [evalLoading, setEvalLoading] = useState(false);
 
   const months = [
     { value: '01', label: 'Januari' },
@@ -117,41 +109,106 @@ const AccountDetail = () => {
     { value: '2023', label: '2023' },
   ];
 
-  // Dummy attendance data
-  const attendanceData = [
-    { id: 1, date: '2025-01-15', clock_in: '07:05', clock_out: '15:10', status: 'present', location: 'Gedung Rektorat' },
-    { id: 2, date: '2025-01-14', clock_in: '07:00', clock_out: '15:05', status: 'present', location: 'Gedung Rektorat' },
-    { id: 3, date: '2025-01-13', clock_in: '07:15', clock_out: '15:00', status: 'late', location: 'Gedung Rektorat' },
-    { id: 4, date: '2025-01-12', clock_in: null, clock_out: null, status: 'leave', location: '-' },
-    { id: 5, date: '2025-01-11', clock_in: '07:02', clock_out: '15:08', status: 'present', location: 'Gedung Rektorat' },
-  ];
+  // Load user data
+  const loadUser = useCallback(async () => {
+    setPageLoading(true);
+    try {
+      await dispatch(fetchUserById(id)).unwrap();
+    } catch (err) {
+      toast.error(err || 'Gagal memuat data user');
+      navigate('/employees');
+    } finally {
+      setPageLoading(false);
+    }
+  }, [dispatch, id, navigate]);
 
-  // Dummy activity data
-  const activityData = [
-    { id: 1, action: 'Check-in', location: 'Gedung Rektorat Lt.1', time: '07:05', date: '2025-01-15', notes: 'On time' },
-    { id: 2, action: 'Meeting', location: 'Ruang Rapat', time: '09:00', date: '2025-01-15', notes: 'Weekly meeting' },
-    { id: 3, action: 'Task Complete', location: 'Gedung Rektorat', time: '11:30', date: '2025-01-15', notes: 'Report submission' },
-    { id: 4, action: 'Check-out', location: 'Gedung Rektorat Lt.1', time: '15:10', date: '2025-01-15', notes: '' },
-    { id: 5, action: 'Check-in', location: 'Gedung Rektorat Lt.1', time: '07:00', date: '2025-01-14', notes: 'On time' },
-  ];
+  // Load related data
+  const loadAttendances = useCallback(() => {
+    dispatch(fetchAttendances({ user_id: id, limit: 30 }));
+  }, [dispatch, id]);
 
-  // Dummy leave data
-  const leaveData = [
-    { id: 1, type: 'Cuti Tahunan', start_date: '2025-01-12', end_date: '2025-01-12', days: 1, reason: 'Keperluan keluarga', status: 'approved' },
-    { id: 2, type: 'Izin Sakit', start_date: '2024-12-20', end_date: '2024-12-21', days: 2, reason: 'Demam', status: 'approved' },
-    { id: 3, type: 'Cuti Tahunan', start_date: '2024-11-25', end_date: '2024-11-27', days: 3, reason: 'Liburan', status: 'approved' },
-  ];
+  const loadActivities = useCallback(() => {
+    dispatch(fetchActivities({ user_id: id, limit: 30 }));
+  }, [dispatch, id]);
 
-  // Dummy evaluation data - monthly instead of quarterly
-  const [evaluationData, setEvaluationData] = useState([
-    { id: 1, period: 'Desember 2024', month: '12', year: '2024', attendance_score: 90, performance_score: 85, attitude_score: 88, skill_score: 82, total: 86.25, date: '2024-12-30' },
-    { id: 2, period: 'November 2024', month: '11', year: '2024', attendance_score: 85, performance_score: 80, attitude_score: 85, skill_score: 80, total: 82.5, date: '2024-11-30' },
-    { id: 3, period: 'Oktober 2024', month: '10', year: '2024', attendance_score: 88, performance_score: 82, attitude_score: 86, skill_score: 78, total: 83.5, date: '2024-10-30' },
-  ]);
+  const loadLeaves = useCallback(() => {
+    dispatch(fetchLeaves({ user_id: id, limit: 30 }));
+  }, [dispatch, id]);
+
+  const loadEvaluations = useCallback(() => {
+    dispatch(fetchEvaluations({ user_id: id, limit: 30 }));
+  }, [dispatch, id]);
+
+  const loadTrainings = useCallback(() => {
+    dispatch(fetchTrainings({ user_id: id, limit: 30 }));
+  }, [dispatch, id]);
+
+  const loadShifts = useCallback(() => {
+    dispatch(fetchShifts({ limit: 100 }));
+  }, [dispatch]);
+
+  // Initial load
+  useEffect(() => {
+    loadUser();
+    loadAttendances();
+    loadActivities();
+    loadLeaves();
+    loadEvaluations();
+    loadTrainings();
+    loadShifts();
+  }, [loadUser, loadAttendances, loadActivities, loadLeaves, loadEvaluations, loadTrainings, loadShifts]);
+
+  // Handle errors and success
+  useEffect(() => {
+    if (usersError) {
+      toast.error(usersError);
+      dispatch(clearUsersError());
+    }
+    if (usersSuccess) {
+      toast.success(usersSuccess);
+      dispatch(clearUsersSuccess());
+    }
+  }, [usersError, usersSuccess, dispatch]);
+
+  useEffect(() => {
+    if (dataError) {
+      toast.error(dataError);
+      dispatch(clearDataError());
+    }
+    if (dataSuccess) {
+      toast.success(dataSuccess);
+      dispatch(clearDataSuccess());
+    }
+  }, [dataError, dataSuccess, dispatch]);
+
+  useEffect(() => {
+    if (masterError) {
+      toast.error(masterError);
+      dispatch(clearMasterError());
+    }
+    if (masterSuccess) {
+      toast.success(masterSuccess);
+      dispatch(clearMasterSuccess());
+    }
+  }, [masterError, masterSuccess, dispatch]);
+
+  // Data arrays
+  const attendanceData = attendances.data || [];
+  const activityData = activities.data || [];
+  const leaveData = leaves.data || [];
+  const evaluationData = evaluations.data || [];
+  const trainingData = trainings.data || [];
+  const shiftsData = shifts.data || [];
+
+  // Shift options for dropdown
+  const shiftOptions = shiftsData.map(s => ({
+    value: s.shift_id,
+    label: `${s.name} (${s.start_time} - ${s.end_time})`
+  }));
 
   // Column definitions
   const attendanceColumns = [
-    { key: 'date', label: 'Tanggal', width: '120px' },
+    { key: 'date', label: 'Tanggal', width: '120px', render: (v) => v ? new Date(v).toLocaleDateString('id-ID') : '-' },
     { key: 'clock_in', label: 'Masuk', width: '80px', render: (v) => v || '-' },
     { key: 'clock_out', label: 'Keluar', width: '80px', render: (v) => v || '-' },
     { key: 'location', label: 'Lokasi' },
@@ -159,7 +216,7 @@ const AccountDetail = () => {
   ];
 
   const activityColumns = [
-    { key: 'date', label: 'Tanggal', width: '120px' },
+    { key: 'date', label: 'Tanggal', width: '120px', render: (v) => v ? new Date(v).toLocaleDateString('id-ID') : '-' },
     { key: 'time', label: 'Waktu', width: '80px' },
     { key: 'action', label: 'Aktivitas' },
     { key: 'location', label: 'Lokasi' },
@@ -168,8 +225,8 @@ const AccountDetail = () => {
 
   const leaveColumns = [
     { key: 'type', label: 'Tipe Cuti' },
-    { key: 'start_date', label: 'Mulai', width: '120px' },
-    { key: 'end_date', label: 'Selesai', width: '120px' },
+    { key: 'start_date', label: 'Mulai', width: '120px', render: (v) => v ? new Date(v).toLocaleDateString('id-ID') : '-' },
+    { key: 'end_date', label: 'Selesai', width: '120px', render: (v) => v ? new Date(v).toLocaleDateString('id-ID') : '-' },
     { key: 'days', label: 'Hari', width: '60px' },
     { key: 'reason', label: 'Alasan' },
     { key: 'status', label: 'Status', width: '100px', render: (v) => <StatusBadge status={v} /> },
@@ -182,19 +239,14 @@ const AccountDetail = () => {
     { key: 'attitude_score', label: 'Sikap', width: '100px' },
     { key: 'skill_score', label: 'Skill', width: '100px' },
     { key: 'total', label: 'Total', width: '80px', render: (v) => <span className="font-bold text-primary">{v}</span> },
-    { key: 'date', label: 'Tanggal', width: '120px' },
+    { key: 'created_at', label: 'Tanggal', width: '120px', render: (v) => v ? new Date(v).toLocaleDateString('id-ID') : '-' },
   ];
 
   const trainingColumns = [
     { key: 'name', label: 'Nama Training' },
-    { key: 'date', label: 'Tanggal', width: '120px' },
+    { key: 'date', label: 'Tanggal', width: '120px', render: (v) => v ? new Date(v).toLocaleDateString('id-ID') : '-' },
     { key: 'duration', label: 'Durasi', width: '100px' },
-    {
-      key: 'status',
-      label: 'Status',
-      width: '120px',
-      render: (v) => <StatusBadge status={v} />
-    },
+    { key: 'status', label: 'Status', width: '120px', render: (v) => <StatusBadge status={v} /> },
     {
       key: 'certificate',
       label: 'Sertifikat',
@@ -214,27 +266,47 @@ const AccountDetail = () => {
     setPasswordData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handlePasswordSubmit = (e) => {
+  const handlePasswordSubmit = async (e) => {
     e.preventDefault();
-    console.log('Password change:', passwordData);
-    setPasswordData({ current_password: '', new_password: '', confirm_password: '' });
+    if (passwordData.new_password !== passwordData.confirm_password) {
+      toast.error('Password baru tidak cocok');
+      return;
+    }
+    setPasswordLoading(true);
+    try {
+      await dispatch(updateUser({
+        id,
+        data: { password: passwordData.new_password }
+      })).unwrap();
+      toast.success('Password berhasil diubah');
+      setPasswordData({ current_password: '', new_password: '', confirm_password: '' });
+    } catch (err) {
+      // Error handled by effect
+    } finally {
+      setPasswordLoading(false);
+    }
   };
 
   // Shift handlers
   const handleOpenShiftModal = () => {
-    setShiftForm({ shift_id: userData.shift_id });
+    setShiftForm({ shift_id: selectedUser?.shift_id || '' });
     setIsShiftModalOpen(true);
   };
 
-  const handleShiftSubmit = () => {
-    const selectedShift = shiftDetails[shiftForm.shift_id];
-    setUserData((prev) => ({
-      ...prev,
-      shift_id: shiftForm.shift_id,
-      shift: selectedShift.name,
-      shift_time: `${selectedShift.start} - ${selectedShift.end}`,
-    }));
-    setIsShiftModalOpen(false);
+  const handleShiftSubmit = async () => {
+    setShiftLoading(true);
+    try {
+      await dispatch(updateUser({
+        id,
+        data: { shift_id: parseInt(shiftForm.shift_id) }
+      })).unwrap();
+      setIsShiftModalOpen(false);
+      loadUser();
+    } catch (err) {
+      // Error handled by effect
+    } finally {
+      setShiftLoading(false);
+    }
   };
 
   // Evaluation handlers
@@ -255,8 +327,8 @@ const AccountDetail = () => {
   const handleEditEval = (item) => {
     setSelectedEval(item);
     setEvalFormData({
-      month: item.month,
-      year: item.year,
+      month: item.month || '',
+      year: item.year || '',
       attendance_score: item.attendance_score,
       performance_score: item.performance_score,
       attitude_score: item.attitude_score,
@@ -271,41 +343,54 @@ const AccountDetail = () => {
     setIsEvalDeleteOpen(true);
   };
 
-  const handleEvalSubmit = () => {
-    const total = (
-      (parseFloat(evalFormData.attendance_score) +
-        parseFloat(evalFormData.performance_score) +
-        parseFloat(evalFormData.attitude_score) +
-        parseFloat(evalFormData.skill_score)) / 4
-    ).toFixed(2);
+  const handleEvalSubmit = async () => {
+    setEvalLoading(true);
+    try {
+      const total = (
+        (parseFloat(evalFormData.attendance_score) +
+          parseFloat(evalFormData.performance_score) +
+          parseFloat(evalFormData.attitude_score) +
+          parseFloat(evalFormData.skill_score)) / 4
+      ).toFixed(2);
 
-    const monthName = months.find(m => m.value === evalFormData.month)?.label || '';
-    const period = `${monthName} ${evalFormData.year}`;
+      const monthName = months.find(m => m.value === evalFormData.month)?.label || '';
+      const period = `${monthName} ${evalFormData.year}`;
 
-    if (selectedEval) {
-      setEvaluationData((prev) =>
-        prev.map((item) =>
-          item.id === selectedEval.id
-            ? { ...item, ...evalFormData, period, total: parseFloat(total) }
-            : item
-        )
-      );
-    } else {
-      const newEval = {
-        id: Date.now(),
-        ...evalFormData,
+      const evalData = {
+        user_id: parseInt(id),
+        month: evalFormData.month,
+        year: evalFormData.year,
         period,
+        attendance_score: parseFloat(evalFormData.attendance_score),
+        performance_score: parseFloat(evalFormData.performance_score),
+        attitude_score: parseFloat(evalFormData.attitude_score),
+        skill_score: parseFloat(evalFormData.skill_score),
         total: parseFloat(total),
-        date: new Date().toISOString().split('T')[0],
+        notes: evalFormData.notes,
       };
-      setEvaluationData((prev) => [newEval, ...prev]);
+
+      if (selectedEval) {
+        await dispatch(updateEvaluation({ id: selectedEval.evaluation_id, data: evalData })).unwrap();
+      } else {
+        await dispatch(createEvaluation(evalData)).unwrap();
+      }
+      setIsEvalModalOpen(false);
+      loadEvaluations();
+    } catch (err) {
+      // Error handled by effect
+    } finally {
+      setEvalLoading(false);
     }
-    setIsEvalModalOpen(false);
   };
 
-  const handleConfirmDeleteEval = () => {
-    setEvaluationData((prev) => prev.filter((item) => item.id !== selectedEval.id));
-    setIsEvalDeleteOpen(false);
+  const handleConfirmDeleteEval = async () => {
+    try {
+      await dispatch(deleteEvaluation(selectedEval.evaluation_id)).unwrap();
+      setIsEvalDeleteOpen(false);
+      loadEvaluations();
+    } catch (err) {
+      // Error handled by effect
+    }
   };
 
   const handleEvalInputChange = (e) => {
@@ -313,17 +398,44 @@ const AccountDetail = () => {
     setEvalFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const currentShift = shiftDetails[userData.shift_id];
+  // Find current shift details
+  const currentShift = shiftsData.find(s => s.shift_id === selectedUser?.shift_id);
+
+  // Calculate leave stats
+  const approvedLeaves = leaveData.filter(l => l.status === 'approved');
+  const usedLeaveDays = approvedLeaves.reduce((acc, l) => acc + (l.days || 0), 0);
+  const totalLeaveAllowed = 12; // Default annual leave
+  const remainingLeave = totalLeaveAllowed - usedLeaveDays;
+
+  if (pageLoading) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center min-h-96">
+          <FiLoader className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </MainLayout>
+    );
+  }
+
+  if (!selectedUser) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center min-h-96">
+          <p className="text-gray-500">User tidak ditemukan</p>
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout>
       <PageHeader
-        title={userData.name}
+        title={selectedUser.name}
         subtitle="Detail informasi karyawan"
         breadcrumbs={[
           { label: 'Dashboard', path: '/dashboard' },
           { label: 'Karyawan', path: '/employees' },
-          { label: userData.name },
+          { label: selectedUser.name },
         ]}
         actions={
           <button
@@ -342,11 +454,11 @@ const AccountDetail = () => {
           {/* Avatar */}
           <div className="flex-shrink-0">
             <div className="w-28 h-28 rounded-2xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow-lg">
-              {userData.avatar ? (
-                <img src={userData.avatar} alt={userData.name} className="w-full h-full rounded-2xl object-cover" />
+              {selectedUser.avatar ? (
+                <img src={selectedUser.avatar} alt={selectedUser.name} className="w-full h-full rounded-2xl object-cover" />
               ) : (
                 <span className="text-4xl font-bold text-white">
-                  {userData.name.split(' ').map((n) => n[0]).join('').slice(0, 2)}
+                  {selectedUser.name?.split(' ').map((n) => n[0]).join('').slice(0, 2)}
                 </span>
               )}
             </div>
@@ -356,10 +468,10 @@ const AccountDetail = () => {
           <div className="flex-1">
             <div className="flex items-start justify-between mb-4">
               <div>
-                <h2 className="text-2xl font-bold text-gray-800">{userData.name}</h2>
+                <h2 className="text-2xl font-bold text-gray-800">{selectedUser.name}</h2>
                 <div className="flex items-center gap-2 mt-1">
-                  <span className="px-3 py-1 bg-primary/10 text-primary text-sm font-medium rounded-full">{userData.role}</span>
-                  <StatusBadge status={userData.status} />
+                  <span className="px-3 py-1 bg-primary/10 text-primary text-sm font-medium rounded-full">{selectedUser.role_name || selectedUser.role}</span>
+                  <StatusBadge status={selectedUser.status} />
                 </div>
               </div>
             </div>
@@ -371,7 +483,7 @@ const AccountDetail = () => {
                 </div>
                 <div className="min-w-0">
                   <span className="text-xs text-gray-500">Email</span>
-                  <p className="font-medium text-sm truncate">{userData.email}</p>
+                  <p className="font-medium text-sm truncate">{selectedUser.email}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-100">
@@ -380,7 +492,7 @@ const AccountDetail = () => {
                 </div>
                 <div className="min-w-0">
                   <span className="text-xs text-gray-500">Telepon</span>
-                  <p className="font-medium text-sm">{userData.phone}</p>
+                  <p className="font-medium text-sm">{selectedUser.phone || '-'}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-100">
@@ -389,7 +501,7 @@ const AccountDetail = () => {
                 </div>
                 <div className="min-w-0">
                   <span className="text-xs text-gray-500">Unit</span>
-                  <p className="font-medium text-sm">{userData.unit}</p>
+                  <p className="font-medium text-sm">{selectedUser.campus_name || '-'}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-100">
@@ -398,7 +510,7 @@ const AccountDetail = () => {
                 </div>
                 <div className="min-w-0">
                   <span className="text-xs text-gray-500">Bergabung</span>
-                  <p className="font-medium text-sm">{userData.join_date}</p>
+                  <p className="font-medium text-sm">{selectedUser.created_at ? new Date(selectedUser.created_at).toLocaleDateString('id-ID') : '-'}</p>
                 </div>
               </div>
             </div>
@@ -419,19 +531,19 @@ const AccountDetail = () => {
                 <div className="space-y-3">
                   <div className="flex justify-between py-3 border-b border-gray-200">
                     <span className="text-gray-500">Nama Lengkap</span>
-                    <span className="font-medium text-gray-800">{userData.name}</span>
+                    <span className="font-medium text-gray-800">{selectedUser.name}</span>
                   </div>
                   <div className="flex justify-between py-3 border-b border-gray-200">
                     <span className="text-gray-500">Email</span>
-                    <span className="font-medium text-gray-800">{userData.email}</span>
+                    <span className="font-medium text-gray-800">{selectedUser.email}</span>
                   </div>
                   <div className="flex justify-between py-3 border-b border-gray-200">
                     <span className="text-gray-500">No. Telepon</span>
-                    <span className="font-medium text-gray-800">{userData.phone}</span>
+                    <span className="font-medium text-gray-800">{selectedUser.phone || '-'}</span>
                   </div>
                   <div className="flex justify-between py-3">
                     <span className="text-gray-500">Tanggal Bergabung</span>
-                    <span className="font-medium text-gray-800">{userData.join_date}</span>
+                    <span className="font-medium text-gray-800">{selectedUser.created_at ? new Date(selectedUser.created_at).toLocaleDateString('id-ID') : '-'}</span>
                   </div>
                 </div>
               </div>
@@ -444,19 +556,19 @@ const AccountDetail = () => {
                 <div className="space-y-3">
                   <div className="flex justify-between py-3 border-b border-gray-200">
                     <span className="text-gray-500">Role</span>
-                    <span className="font-medium text-gray-800">{userData.role}</span>
+                    <span className="font-medium text-gray-800">{selectedUser.role_name || selectedUser.role}</span>
                   </div>
                   <div className="flex justify-between py-3 border-b border-gray-200">
                     <span className="text-gray-500">Shift</span>
-                    <span className="font-medium text-gray-800">{userData.shift}</span>
+                    <span className="font-medium text-gray-800">{currentShift?.name || '-'}</span>
                   </div>
                   <div className="flex justify-between py-3 border-b border-gray-200">
                     <span className="text-gray-500">Unit</span>
-                    <span className="font-medium text-gray-800">{userData.unit}</span>
+                    <span className="font-medium text-gray-800">{selectedUser.campus_name || '-'}</span>
                   </div>
                   <div className="flex justify-between py-3">
                     <span className="text-gray-500">Gedung</span>
-                    <span className="font-medium text-gray-800">{userData.building}</span>
+                    <span className="font-medium text-gray-800">{selectedUser.building_name || '-'}</span>
                   </div>
                 </div>
               </div>
@@ -505,8 +617,10 @@ const AccountDetail = () => {
                 <div className="pt-2">
                   <button
                     type="submit"
-                    className="w-full md:w-auto px-6 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 font-medium"
+                    disabled={passwordLoading}
+                    className="w-full md:w-auto px-6 py-3 bg-primary text-white rounded-xl hover:bg-primary/90 font-medium disabled:opacity-50 flex items-center justify-center gap-2"
                   >
+                    {passwordLoading && <FiLoader className="w-4 h-4 animate-spin" />}
                     Simpan Password Baru
                   </button>
                 </div>
@@ -518,6 +632,7 @@ const AccountDetail = () => {
             <DataTable
               columns={attendanceColumns}
               data={attendanceData}
+              loading={dataLoading}
               showActions={false}
             />
           </Tabs.Tab>
@@ -526,6 +641,7 @@ const AccountDetail = () => {
             <DataTable
               columns={activityColumns}
               data={activityData}
+              loading={dataLoading}
               showActions={false}
             />
           </Tabs.Tab>
@@ -539,7 +655,7 @@ const AccountDetail = () => {
                       <FiSun className="w-8 h-8 text-white" />
                     </div>
                     <div>
-                      <h4 className="font-bold text-xl text-gray-800">{userData.shift}</h4>
+                      <h4 className="font-bold text-xl text-gray-800">{currentShift?.name || 'Belum ada shift'}</h4>
                       <p className="text-gray-500">Shift saat ini</p>
                     </div>
                   </div>
@@ -555,11 +671,11 @@ const AccountDetail = () => {
                 <div className="grid grid-cols-3 gap-4">
                   <div className="bg-white rounded-xl p-4 text-center shadow-sm">
                     <span className="text-sm text-gray-500 block mb-1">Jam Masuk</span>
-                    <p className="font-bold text-2xl text-primary">{currentShift?.start || '07:00'}</p>
+                    <p className="font-bold text-2xl text-primary">{currentShift?.start_time || '-'}</p>
                   </div>
                   <div className="bg-white rounded-xl p-4 text-center shadow-sm">
                     <span className="text-sm text-gray-500 block mb-1">Jam Keluar</span>
-                    <p className="font-bold text-2xl text-primary">{currentShift?.end || '15:00'}</p>
+                    <p className="font-bold text-2xl text-primary">{currentShift?.end_time || '-'}</p>
                   </div>
                   <div className="bg-white rounded-xl p-4 text-center shadow-sm">
                     <span className="text-sm text-gray-500 block mb-1">Durasi</span>
@@ -567,12 +683,14 @@ const AccountDetail = () => {
                   </div>
                 </div>
 
-                <div className="mt-4 pt-4 border-t border-primary/20">
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <FiClock className="w-4 h-4" />
-                    <span className="text-sm">Waktu Istirahat: <strong>{currentShift?.break || '12:00 - 13:00'}</strong> (60 menit)</span>
+                {currentShift?.break_start && (
+                  <div className="mt-4 pt-4 border-t border-primary/20">
+                    <div className="flex items-center gap-2 text-gray-600">
+                      <FiClock className="w-4 h-4" />
+                      <span className="text-sm">Waktu Istirahat: <strong>{currentShift.break_start} - {currentShift.break_end}</strong></span>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
           </Tabs.Tab>
@@ -581,23 +699,24 @@ const AccountDetail = () => {
             <div className="mb-6 grid grid-cols-3 gap-4">
               <div className="bg-gradient-to-br from-primary/10 to-primary/5 rounded-xl p-5 text-center">
                 <span className="text-sm text-gray-500">Sisa Cuti</span>
-                <p className="font-bold text-3xl text-primary mt-1">8</p>
+                <p className="font-bold text-3xl text-primary mt-1">{Math.max(0, remainingLeave)}</p>
                 <span className="text-xs text-gray-400">hari</span>
               </div>
               <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-5 text-center">
                 <span className="text-sm text-gray-500">Terpakai</span>
-                <p className="font-bold text-3xl text-orange-500 mt-1">4</p>
+                <p className="font-bold text-3xl text-orange-500 mt-1">{usedLeaveDays}</p>
                 <span className="text-xs text-gray-400">hari</span>
               </div>
               <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-5 text-center">
                 <span className="text-sm text-gray-500">Total Tahun Ini</span>
-                <p className="font-bold text-3xl text-gray-700 mt-1">12</p>
+                <p className="font-bold text-3xl text-gray-700 mt-1">{totalLeaveAllowed}</p>
                 <span className="text-xs text-gray-400">hari</span>
               </div>
             </div>
             <DataTable
               columns={leaveColumns}
               data={leaveData}
+              loading={dataLoading}
               showActions={false}
             />
           </Tabs.Tab>
@@ -616,6 +735,7 @@ const AccountDetail = () => {
             <DataTable
               columns={trainingColumns}
               data={trainingData}
+              loading={dataLoading}
               showActions={false}
             />
           </Tabs.Tab>
@@ -634,6 +754,7 @@ const AccountDetail = () => {
             <DataTable
               columns={evaluationColumns}
               data={evaluationData}
+              loading={dataLoading}
               onEdit={handleEditEval}
               onDelete={handleDeleteEval}
               showActions={true}
@@ -649,9 +770,10 @@ const AccountDetail = () => {
         onClose={() => setIsShiftModalOpen(false)}
         title="Ubah Shift Karyawan"
         onSubmit={handleShiftSubmit}
+        loading={shiftLoading}
       >
         <p className="text-sm text-gray-500 mb-4">
-          Pilih shift baru untuk {userData.name}
+          Pilih shift baru untuk {selectedUser.name}
         </p>
         <FormInput
           label="Shift"
@@ -659,7 +781,7 @@ const AccountDetail = () => {
           type="select"
           value={shiftForm.shift_id}
           onChange={(e) => setShiftForm({ shift_id: e.target.value })}
-          options={shifts}
+          options={[{ value: '', label: 'Pilih Shift' }, ...shiftOptions]}
           required
         />
       </Modal>
@@ -670,6 +792,7 @@ const AccountDetail = () => {
         onClose={() => setIsEvalModalOpen(false)}
         title={selectedEval ? 'Edit Penilaian' : 'Tambah Penilaian'}
         onSubmit={handleEvalSubmit}
+        loading={evalLoading}
       >
         <div className="grid grid-cols-2 gap-4">
           <FormInput
@@ -678,7 +801,7 @@ const AccountDetail = () => {
             type="select"
             value={evalFormData.month}
             onChange={handleEvalInputChange}
-            options={months}
+            options={[{ value: '', label: 'Pilih Bulan' }, ...months]}
             required
           />
           <FormInput

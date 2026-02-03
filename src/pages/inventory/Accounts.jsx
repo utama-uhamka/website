@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { toast } from 'react-hot-toast';
 import MainLayout from '../../layouts/MainLayout';
 import {
   DataTable,
@@ -9,39 +11,43 @@ import {
   ConfirmDialog,
   PageHeader,
 } from '../../components/ui';
-import { FiCreditCard } from 'react-icons/fi';
+import { FiCreditCard, FiLoader } from 'react-icons/fi';
+import {
+  fetchAccounts,
+  createAccount,
+  updateAccount,
+  deleteAccount,
+  clearMasterError,
+  clearMasterSuccess,
+} from '../../store/masterSlice';
+import { fetchCampuses } from '../../store/campusesSlice';
+import { fetchBuildings } from '../../store/masterSlice';
 
 const Accounts = () => {
+  const dispatch = useDispatch();
+  const { accounts, buildings, loading, error, success } = useSelector((state) => state.master);
+  const { data: campuses } = useSelector((state) => state.campuses);
+
   const [searchValue, setSearchValue] = useState('');
   const [filterValues, setFilterValues] = useState({});
   const [currentPage, setCurrentPage] = useState(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [formLoading, setFormLoading] = useState(false);
   const [formData, setFormData] = useState({
-    name: '',
+    account_name: '',
     account_number: '',
-    type: '',
+    account_type: '',
     provider: '',
     campus_id: '',
     building_id: '',
     balance: '',
     description: '',
-    status: 'active',
+    is_active: 1,
   });
 
-  // Dummy data
-  const campuses = [
-    { value: '1', label: 'Kampus A - Limau' },
-    { value: '2', label: 'Kampus B - Ciracas' },
-    { value: '3', label: 'Kampus C - Ciledug' },
-  ];
-
-  const buildings = [
-    { value: '1', label: 'Gedung Rektorat' },
-    { value: '2', label: 'Gedung FKIP' },
-    { value: '3', label: 'Gedung FEB' },
-  ];
+  const itemsPerPage = 10;
 
   const accountTypes = [
     { value: 'pln', label: 'PLN' },
@@ -51,46 +57,105 @@ const Accounts = () => {
     { value: 'gas', label: 'Gas' },
   ];
 
-  const data = [
-    { id: 1, name: 'PLN Gedung Rektorat', account_number: '541234567890', type: 'pln', type_label: 'PLN', provider: 'PLN', campus: 'Kampus A', campus_id: '1', building: 'Gedung Rektorat', building_id: '1', balance: 5000000, status: 'active' },
-    { id: 2, name: 'PDAM Gedung Rektorat', account_number: '12345678', type: 'pdam', type_label: 'PDAM', provider: 'PAM Jaya', campus: 'Kampus A', campus_id: '1', building: 'Gedung Rektorat', building_id: '1', balance: 2500000, status: 'active' },
-    { id: 3, name: 'PLN Gedung FKIP', account_number: '541234567891', type: 'pln', type_label: 'PLN', provider: 'PLN', campus: 'Kampus A', campus_id: '1', building: 'Gedung FKIP', building_id: '2', balance: 4500000, status: 'active' },
-    { id: 4, name: 'Internet Kampus A', account_number: 'INT-001-KA', type: 'internet', type_label: 'Internet', provider: 'Telkom', campus: 'Kampus A', campus_id: '1', building: '-', building_id: '', balance: 10000000, status: 'active' },
-    { id: 5, name: 'PLN Gedung FEB', account_number: '541234567892', type: 'pln', type_label: 'PLN', provider: 'PLN', campus: 'Kampus B', campus_id: '2', building: 'Gedung FEB', building_id: '3', balance: 3800000, status: 'active' },
-    { id: 6, name: 'Telepon Kampus A', account_number: 'TEL-001-KA', type: 'phone', type_label: 'Telepon', provider: 'Telkom', campus: 'Kampus A', campus_id: '1', building: '-', building_id: '', balance: 1500000, status: 'inactive' },
-  ];
+  // Load accounts
+  const loadAccounts = useCallback(() => {
+    const params = {
+      page: currentPage,
+      limit: itemsPerPage,
+      search: searchValue,
+      ...filterValues,
+    };
+    dispatch(fetchAccounts(params));
+  }, [dispatch, currentPage, itemsPerPage, searchValue, filterValues]);
+
+  useEffect(() => {
+    loadAccounts();
+  }, [loadAccounts]);
+
+  // Load campuses and buildings for filters
+  useEffect(() => {
+    dispatch(fetchCampuses({ limit: 100 }));
+    dispatch(fetchBuildings({ limit: 100 }));
+  }, [dispatch]);
+
+  // Handle errors
+  useEffect(() => {
+    if (error) {
+      toast.error(error);
+      dispatch(clearMasterError());
+    }
+  }, [error, dispatch]);
+
+  // Handle success
+  useEffect(() => {
+    if (success) {
+      toast.success(success);
+      dispatch(clearMasterSuccess());
+      loadAccounts();
+    }
+  }, [success, dispatch, loadAccounts]);
+
+  // Reset page when search/filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchValue, filterValues]);
+
+  // Campus options
+  const campusOptions = campuses.map((c) => ({
+    value: c.campus_id?.toString(),
+    label: c.campus_name,
+  }));
+
+  // Building options (filtered by campus if selected)
+  const buildingOptions = buildings.data
+    .filter((b) => !formData.campus_id || b.campus_id?.toString() === formData.campus_id)
+    .map((b) => ({
+      value: b.building_id?.toString(),
+      label: b.building_name,
+    }));
 
   const columns = [
     {
-      key: 'name',
+      key: 'account_name',
       label: 'Akun',
       render: (value, item) => (
         <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-            item.type === 'pln' ? 'bg-yellow-100' :
-            item.type === 'pdam' ? 'bg-blue-100' :
-            item.type === 'internet' ? 'bg-purple-100' :
-            'bg-gray-100'
-          }`}>
-            <FiCreditCard className={`${
-              item.type === 'pln' ? 'text-yellow-600' :
-              item.type === 'pdam' ? 'text-blue-600' :
-              item.type === 'internet' ? 'text-purple-600' :
-              'text-gray-600'
-            }`} size={18} />
+          <div
+            className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+              item.account_type === 'pln'
+                ? 'bg-yellow-100'
+                : item.account_type === 'pdam'
+                ? 'bg-blue-100'
+                : item.account_type === 'internet'
+                ? 'bg-purple-100'
+                : 'bg-gray-100'
+            }`}
+          >
+            <FiCreditCard
+              className={`${
+                item.account_type === 'pln'
+                  ? 'text-yellow-600'
+                  : item.account_type === 'pdam'
+                  ? 'text-blue-600'
+                  : item.account_type === 'internet'
+                  ? 'text-purple-600'
+                  : 'text-gray-600'
+              }`}
+              size={18}
+            />
           </div>
           <div>
-            <p className="font-medium text-gray-800">{value}</p>
-            <p className="text-xs text-gray-500">{item.account_number}</p>
+            <p className="font-medium text-gray-800">{value || '-'}</p>
+            <p className="text-xs text-gray-500">{item.account_number || '-'}</p>
           </div>
         </div>
       ),
     },
     {
-      key: 'type_label',
+      key: 'account_type',
       label: 'Tipe',
       width: '100px',
-      render: (value, item) => {
+      render: (value) => {
         const typeColors = {
           pln: 'bg-yellow-100 text-yellow-700',
           pdam: 'bg-blue-100 text-blue-700',
@@ -98,49 +163,70 @@ const Accounts = () => {
           phone: 'bg-green-100 text-green-700',
           gas: 'bg-orange-100 text-orange-700',
         };
+        const typeLabels = {
+          pln: 'PLN',
+          pdam: 'PDAM',
+          internet: 'Internet',
+          phone: 'Telepon',
+          gas: 'Gas',
+        };
         return (
-          <span className={`px-2 py-1 text-xs font-medium rounded-full ${typeColors[item.type] || 'bg-gray-100 text-gray-700'}`}>
-            {value}
+          <span
+            className={`px-2 py-1 text-xs font-medium rounded-full ${typeColors[value] || 'bg-gray-100 text-gray-700'}`}
+          >
+            {typeLabels[value] || value || '-'}
           </span>
         );
       },
     },
-    { key: 'provider', label: 'Provider', width: '100px' },
-    { key: 'campus', label: 'Kampus', width: '120px' },
-    { key: 'building', label: 'Gedung', width: '130px' },
+    { key: 'provider', label: 'Provider', width: '100px', render: (value) => value || '-' },
+    {
+      key: 'campus',
+      label: 'Kampus',
+      width: '120px',
+      render: (value, item) => item.campus?.campus_name || '-',
+    },
+    {
+      key: 'building',
+      label: 'Gedung',
+      width: '130px',
+      render: (value, item) => item.building?.building_name || '-',
+    },
     {
       key: 'balance',
       label: 'Saldo/Tagihan',
       width: '140px',
       render: (value) => (
-        <span className="font-medium">Rp {value.toLocaleString('id-ID')}</span>
+        <span className="font-medium">
+          {value ? `Rp ${Number(value).toLocaleString('id-ID')}` : 'Rp 0'}
+        </span>
       ),
     },
     {
-      key: 'status',
+      key: 'is_active',
       label: 'Status',
       width: '100px',
-      render: (value) => <StatusBadge status={value} />,
+      render: (value) => <StatusBadge status={value === 1 ? 'active' : 'inactive'} />,
     },
   ];
 
   const filters = [
     {
-      key: 'type',
+      key: 'account_type',
       label: 'Tipe',
       options: accountTypes,
     },
     {
       key: 'campus_id',
       label: 'Kampus',
-      options: campuses,
+      options: campusOptions,
     },
     {
-      key: 'status',
+      key: 'is_active',
       label: 'Status',
       options: [
-        { value: 'active', label: 'Aktif' },
-        { value: 'inactive', label: 'Nonaktif' },
+        { value: '1', label: 'Aktif' },
+        { value: '0', label: 'Nonaktif' },
       ],
     },
   ];
@@ -152,15 +238,15 @@ const Accounts = () => {
   const handleAdd = () => {
     setSelectedItem(null);
     setFormData({
-      name: '',
+      account_name: '',
       account_number: '',
-      type: '',
+      account_type: '',
       provider: '',
       campus_id: '',
       building_id: '',
       balance: '',
       description: '',
-      status: 'active',
+      is_active: 1,
     });
     setIsModalOpen(true);
   };
@@ -168,15 +254,15 @@ const Accounts = () => {
   const handleEdit = (item) => {
     setSelectedItem(item);
     setFormData({
-      name: item.name,
-      account_number: item.account_number,
-      type: item.type,
-      provider: item.provider,
-      campus_id: item.campus_id,
-      building_id: item.building_id,
-      balance: item.balance,
+      account_name: item.account_name || '',
+      account_number: item.account_number || '',
+      account_type: item.account_type || '',
+      provider: item.provider || '',
+      campus_id: item.campus_id?.toString() || '',
+      building_id: item.building_id?.toString() || '',
+      balance: item.balance?.toString() || '',
       description: item.description || '',
-      status: item.status,
+      is_active: item.is_active,
     });
     setIsModalOpen(true);
   };
@@ -186,31 +272,52 @@ const Accounts = () => {
     setIsDeleteOpen(true);
   };
 
-  const handleSubmit = () => {
-    console.log('Form submitted:', formData);
-    setIsModalOpen(false);
+  const handleSubmit = async () => {
+    setFormLoading(true);
+    try {
+      const submitData = {
+        account_name: formData.account_name,
+        account_number: formData.account_number,
+        account_type: formData.account_type,
+        provider: formData.provider,
+        campus_id: formData.campus_id ? parseInt(formData.campus_id) : null,
+        building_id: formData.building_id ? parseInt(formData.building_id) : null,
+        balance: formData.balance ? parseFloat(formData.balance) : 0,
+        description: formData.description,
+        is_active: parseInt(formData.is_active),
+      };
+
+      if (selectedItem) {
+        await dispatch(updateAccount({ id: selectedItem.account_id, data: submitData })).unwrap();
+      } else {
+        await dispatch(createAccount(submitData)).unwrap();
+      }
+      setIsModalOpen(false);
+    } catch (err) {
+      // Error handled by slice
+    } finally {
+      setFormLoading(false);
+    }
   };
 
-  const handleConfirmDelete = () => {
-    console.log('Deleted:', selectedItem);
-    setIsDeleteOpen(false);
+  const handleConfirmDelete = async () => {
+    try {
+      await dispatch(deleteAccount(selectedItem.account_id)).unwrap();
+      setIsDeleteOpen(false);
+    } catch (err) {
+      // Error handled by slice
+    }
   };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-  };
 
-  // Filter data
-  const filteredData = data.filter((item) => {
-    const matchSearch =
-      item.name.toLowerCase().includes(searchValue.toLowerCase()) ||
-      item.account_number.toLowerCase().includes(searchValue.toLowerCase());
-    const matchType = !filterValues.type || item.type === filterValues.type;
-    const matchCampus = !filterValues.campus_id || item.campus_id === filterValues.campus_id;
-    const matchStatus = !filterValues.status || item.status === filterValues.status;
-    return matchSearch && matchType && matchCampus && matchStatus;
-  });
+    // Reset building when campus changes
+    if (name === 'campus_id') {
+      setFormData((prev) => ({ ...prev, building_id: '' }));
+    }
+  };
 
   return (
     <MainLayout>
@@ -235,15 +342,23 @@ const Accounts = () => {
         addLabel="Tambah Akun"
       />
 
-      <DataTable
-        columns={columns}
-        data={filteredData}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-        currentPage={currentPage}
-        totalPages={Math.ceil(filteredData.length / 10)}
-        onPageChange={setCurrentPage}
-      />
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <FiLoader className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={accounts.data}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+          currentPage={accounts.pagination.page}
+          totalPages={accounts.pagination.totalPages}
+          totalItems={accounts.pagination.total}
+          itemsPerPage={itemsPerPage}
+          onPageChange={setCurrentPage}
+        />
+      )}
 
       {/* Add/Edit Modal */}
       <Modal
@@ -251,13 +366,14 @@ const Accounts = () => {
         onClose={() => setIsModalOpen(false)}
         title={selectedItem ? 'Edit Akun' : 'Tambah Akun'}
         onSubmit={handleSubmit}
+        loading={formLoading}
         size="lg"
       >
         <div className="grid grid-cols-2 gap-4">
           <FormInput
             label="Nama Akun"
-            name="name"
-            value={formData.name}
+            name="account_name"
+            value={formData.account_name}
             onChange={handleInputChange}
             placeholder="Contoh: PLN Gedung Rektorat"
             required
@@ -274,9 +390,9 @@ const Accounts = () => {
         <div className="grid grid-cols-2 gap-4">
           <FormInput
             label="Tipe Akun"
-            name="type"
+            name="account_type"
             type="select"
-            value={formData.type}
+            value={formData.account_type}
             onChange={handleInputChange}
             options={accountTypes}
             required
@@ -297,7 +413,7 @@ const Accounts = () => {
             type="select"
             value={formData.campus_id}
             onChange={handleInputChange}
-            options={campuses}
+            options={campusOptions}
             required
           />
           <FormInput
@@ -306,7 +422,7 @@ const Accounts = () => {
             type="select"
             value={formData.building_id}
             onChange={handleInputChange}
-            options={buildings}
+            options={buildingOptions}
             placeholder="Pilih gedung (opsional)"
           />
         </div>
@@ -321,13 +437,13 @@ const Accounts = () => {
           />
           <FormInput
             label="Status"
-            name="status"
+            name="is_active"
             type="select"
-            value={formData.status}
-            onChange={handleInputChange}
+            value={formData.is_active?.toString()}
+            onChange={(e) => setFormData((prev) => ({ ...prev, is_active: parseInt(e.target.value) }))}
             options={[
-              { value: 'active', label: 'Aktif' },
-              { value: 'inactive', label: 'Nonaktif' },
+              { value: '1', label: 'Aktif' },
+              { value: '0', label: 'Nonaktif' },
             ]}
           />
         </div>
@@ -347,9 +463,10 @@ const Accounts = () => {
         onClose={() => setIsDeleteOpen(false)}
         onConfirm={handleConfirmDelete}
         title="Hapus Akun"
-        message={`Apakah Anda yakin ingin menghapus "${selectedItem?.name}"? Data billing terkait akan tetap tersimpan.`}
+        message={`Apakah Anda yakin ingin menghapus "${selectedItem?.account_name}"? Data billing terkait akan tetap tersimpan.`}
         confirmText="Ya, Hapus"
         type="danger"
+        loading={loading}
       />
     </MainLayout>
   );

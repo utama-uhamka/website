@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
+import { toast } from 'react-hot-toast';
 import MainLayout from '../../layouts/MainLayout';
 import {
   DataTable,
@@ -17,33 +19,36 @@ import {
   FiPackage,
   FiCheckCircle,
   FiAlertCircle,
+  FiLoader,
 } from 'react-icons/fi';
+import {
+  fetchCategoryItemById,
+  clearMasterError,
+  clearMasterSuccess,
+} from '../../store/masterSlice';
+import {
+  fetchItems,
+  createItem,
+  updateItem,
+  deleteItem,
+  clearDataError,
+  clearDataSuccess,
+} from '../../store/dataSlice';
 
 const CategoryItemDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const dispatch = useDispatch();
 
-  // Dummy category data
-  const categoryData = {
-    id: parseInt(id),
-    name: 'Elektronik',
-    code: 'ELK',
-    description: 'Peralatan elektronik seperti komputer, printer, AC, dan peralatan listrik lainnya',
-    item_count: 45,
-    status: 'active',
-  };
+  // Redux state
+  const { loading: masterLoading, error: masterError, success: masterSuccess } = useSelector((state) => state.master);
+  const { items, loading: dataLoading, error: dataError, success: dataSuccess } = useSelector((state) => state.data);
+
+  // Local state for category detail
+  const [categoryData, setCategoryData] = useState(null);
+  const [categoryLoading, setCategoryLoading] = useState(true);
 
   // Items CRUD states
-  const [itemsData, setItemsData] = useState([
-    { id: 1, name: 'Komputer Desktop', code: 'ELK-001', quantity: 25, unit: 'Unit', condition: 'Baik', location: 'Gedung Rektorat', status: 'active' },
-    { id: 2, name: 'Laptop ASUS', code: 'ELK-002', quantity: 15, unit: 'Unit', condition: 'Baik', location: 'Gedung FKIP', status: 'active' },
-    { id: 3, name: 'Printer Canon', code: 'ELK-003', quantity: 10, unit: 'Unit', condition: 'Cukup', location: 'Gedung Rektorat', status: 'active' },
-    { id: 4, name: 'AC Split 2PK', code: 'ELK-004', quantity: 30, unit: 'Unit', condition: 'Baik', location: 'Semua Gedung', status: 'active' },
-    { id: 5, name: 'Proyektor Epson', code: 'ELK-005', quantity: 12, unit: 'Unit', condition: 'Baik', location: 'Ruang Kelas', status: 'active' },
-    { id: 6, name: 'Scanner HP', code: 'ELK-006', quantity: 5, unit: 'Unit', condition: 'Rusak', location: 'Gedung Rektorat', status: 'inactive' },
-    { id: 7, name: 'UPS APC', code: 'ELK-007', quantity: 20, unit: 'Unit', condition: 'Baik', location: 'Ruang Server', status: 'active' },
-    { id: 8, name: 'TV LED 55"', code: 'ELK-008', quantity: 8, unit: 'Unit', condition: 'Baik', location: 'Lobby', status: 'active' },
-  ]);
   const [isItemModalOpen, setIsItemModalOpen] = useState(false);
   const [isItemDeleteOpen, setIsItemDeleteOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
@@ -56,6 +61,7 @@ const CategoryItemDetail = () => {
     location: '',
     status: 'active',
   });
+  const [itemFormLoading, setItemFormLoading] = useState(false);
 
   const conditions = [
     { value: 'Baik', label: 'Baik' },
@@ -71,22 +77,76 @@ const CategoryItemDetail = () => {
     { value: 'Box', label: 'Box' },
   ];
 
+  // Load category detail
+  const loadCategoryDetail = useCallback(async () => {
+    setCategoryLoading(true);
+    try {
+      const result = await dispatch(fetchCategoryItemById(id)).unwrap();
+      setCategoryData(result.data);
+    } catch (err) {
+      toast.error(err || 'Gagal memuat detail kategori');
+      navigate('/master/category-items');
+    } finally {
+      setCategoryLoading(false);
+    }
+  }, [dispatch, id, navigate]);
+
+  // Load items for this category
+  const loadItems = useCallback(() => {
+    dispatch(fetchItems({ category_id: id, limit: 100 }));
+  }, [dispatch, id]);
+
+  // Initial load
+  useEffect(() => {
+    loadCategoryDetail();
+    loadItems();
+  }, [loadCategoryDetail, loadItems]);
+
+  // Handle master errors and success
+  useEffect(() => {
+    if (masterError) {
+      toast.error(masterError);
+      dispatch(clearMasterError());
+    }
+    if (masterSuccess) {
+      toast.success(masterSuccess);
+      dispatch(clearMasterSuccess());
+    }
+  }, [masterError, masterSuccess, dispatch]);
+
+  // Handle data errors and success
+  useEffect(() => {
+    if (dataError) {
+      toast.error(dataError);
+      dispatch(clearDataError());
+    }
+    if (dataSuccess) {
+      toast.success(dataSuccess);
+      dispatch(clearDataSuccess());
+    }
+  }, [dataError, dataSuccess, dispatch]);
+
+  // Data arrays
+  const itemsData = items.data || [];
+
   // Column definitions
   const itemColumns = [
     { key: 'code', label: 'Kode', width: '100px' },
     { key: 'name', label: 'Nama Item' },
-    { key: 'quantity', label: 'Jumlah', width: '80px', render: (v, row) => `${v} ${row.unit}` },
+    { key: 'quantity', label: 'Jumlah', width: '80px', render: (v, row) => `${v} ${row.unit || ''}` },
     {
-      key: 'condition',
+      key: 'item_condition',
       label: 'Kondisi',
-      width: '100px',
+      width: '120px',
       render: (v) => (
         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
           v === 'Baik' ? 'bg-green-100 text-green-700' :
-          v === 'Cukup' ? 'bg-yellow-100 text-yellow-700' :
-          'bg-red-100 text-red-700'
+          v === 'Diperbaiki' ? 'bg-blue-100 text-blue-700' :
+          v === 'Menunggu Diperbaiki' ? 'bg-yellow-100 text-yellow-700' :
+          v === 'Rusak' ? 'bg-red-100 text-red-700' :
+          'bg-gray-100 text-gray-700'
         }`}>
-          {v}
+          {v || '-'}
         </span>
       )
     },
@@ -115,9 +175,9 @@ const CategoryItemDetail = () => {
       name: item.name,
       code: item.code,
       quantity: item.quantity,
-      unit: item.unit,
+      unit: item.unit || 'Unit',
       condition: item.condition,
-      location: item.location,
+      location: item.location || '',
       status: item.status,
     });
     setIsItemModalOpen(true);
@@ -128,26 +188,62 @@ const CategoryItemDetail = () => {
     setIsItemDeleteOpen(true);
   };
 
-  const handleItemSubmit = () => {
-    if (selectedItem) {
-      setItemsData((prev) =>
-        prev.map((item) => (item.id === selectedItem.id ? { ...item, ...itemForm } : item))
-      );
-    } else {
-      setItemsData((prev) => [...prev, { id: Date.now(), ...itemForm }]);
+  const handleItemSubmit = async () => {
+    setItemFormLoading(true);
+    try {
+      const itemData = {
+        ...itemForm,
+        category_id: parseInt(id),
+        quantity: parseInt(itemForm.quantity),
+      };
+      if (selectedItem) {
+        await dispatch(updateItem({ id: selectedItem.item_id, data: itemData })).unwrap();
+      } else {
+        await dispatch(createItem(itemData)).unwrap();
+      }
+      setIsItemModalOpen(false);
+      loadItems();
+    } catch (err) {
+      // Error handled by effect
+    } finally {
+      setItemFormLoading(false);
     }
-    setIsItemModalOpen(false);
   };
 
-  const handleConfirmDeleteItem = () => {
-    setItemsData((prev) => prev.filter((item) => item.id !== selectedItem.id));
-    setIsItemDeleteOpen(false);
+  const handleConfirmDeleteItem = async () => {
+    try {
+      await dispatch(deleteItem(selectedItem.item_id)).unwrap();
+      setIsItemDeleteOpen(false);
+      loadItems();
+    } catch (err) {
+      // Error handled by effect
+    }
   };
 
   // Calculate stats
-  const totalItems = itemsData.reduce((sum, item) => sum + item.quantity, 0);
+  const totalItems = itemsData.reduce((sum, item) => sum + (item.quantity || 0), 0);
   const goodCondition = itemsData.filter(item => item.condition === 'Baik').length;
   const needAttention = itemsData.filter(item => item.condition !== 'Baik').length;
+
+  if (categoryLoading) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center min-h-96">
+          <FiLoader className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </MainLayout>
+    );
+  }
+
+  if (!categoryData) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center min-h-96">
+          <p className="text-gray-500">Kategori tidak ditemukan</p>
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout>
@@ -259,6 +355,7 @@ const CategoryItemDetail = () => {
         <DataTable
           columns={itemColumns}
           data={itemsData}
+          loading={dataLoading}
           onEdit={handleEditItem}
           onDelete={handleDeleteItem}
           showActions={true}
@@ -272,6 +369,7 @@ const CategoryItemDetail = () => {
         onClose={() => setIsItemModalOpen(false)}
         title={selectedItem ? 'Edit Item' : 'Tambah Item'}
         onSubmit={handleItemSubmit}
+        loading={itemFormLoading}
       >
         <div className="grid grid-cols-2 gap-4">
           <FormInput
@@ -324,7 +422,6 @@ const CategoryItemDetail = () => {
           value={itemForm.location}
           onChange={(e) => setItemForm({ ...itemForm, location: e.target.value })}
           placeholder="Contoh: Gedung Rektorat"
-          required
         />
         <FormInput
           label="Status"

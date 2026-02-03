@@ -81,12 +81,12 @@ const Header = () => {
           >
             <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
               <span className="text-white font-semibold">
-                {user?.name?.charAt(0) || 'M'}
+                {user?.full_name?.charAt(0) || 'U'}
               </span>
             </div>
             <div className="text-left">
-              <div className="font-semibold text-sm">{user?.name || 'Muzifa'}</div>
-              <div className="text-xs text-gray-500">Admin</div>
+              <div className="font-semibold text-sm">{user?.full_name || 'User'}</div>
+              <div className="text-xs text-gray-500">{user?.role?.role_name || 'User'}</div>
             </div>
             <FiChevronDown className={`text-gray-400 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} size={16} />
           </div>
