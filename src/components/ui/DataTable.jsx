@@ -19,6 +19,8 @@ const DataTable = ({
   emptyMessage = 'Tidak ada data',
   showActions = true,
   actionColumn = { edit: true, delete: true, view: false },
+  canDelete, // Function to check if item can be deleted: (item) => boolean
+  canEdit, // Function to check if item can be edited: (item) => boolean
 }) => {
   const renderCell = (item, column) => {
     if (column.render) {
@@ -136,7 +138,7 @@ const DataTable = ({
                             <FiEye size={16} />
                           </button>
                         )}
-                        {actionColumn.edit && onEdit && (
+                        {actionColumn.edit && onEdit && (!canEdit || canEdit(item)) && (
                           <button
                             onClick={() => onEdit(item)}
                             className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
@@ -145,7 +147,7 @@ const DataTable = ({
                             <FiEdit2 size={16} />
                           </button>
                         )}
-                        {actionColumn.delete && onDelete && (
+                        {actionColumn.delete && onDelete && (!canDelete || canDelete(item)) && (
                           <button
                             onClick={() => onDelete(item)}
                             className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"

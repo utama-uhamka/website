@@ -34,6 +34,7 @@ import NotFound from './pages/NotFound';
 // User Management
 import Users from './pages/Users';
 import Employees from './pages/Employees';
+import EmployeeDetail from './pages/EmployeeDetail';
 
 // Inventory Pages
 import Items from './pages/inventory/Items';
@@ -115,6 +116,7 @@ function App() {
           {/* User Management */}
           <Route path="/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
           <Route path="/employees" element={<ProtectedRoute><Employees /></ProtectedRoute>} />
+          <Route path="/employee/:id" element={<ProtectedRoute><EmployeeDetail /></ProtectedRoute>} />
 
           {/* Account Detail */}
           <Route path="/account/:id" element={<ProtectedRoute><AccountDetail /></ProtectedRoute>} />

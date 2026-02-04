@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'react-hot-toast';
+import * as XLSX from 'xlsx';
 import MainLayout from '../layouts/MainLayout';
 import {
   DataTable,
@@ -13,7 +14,7 @@ import {
   PageHeader,
   AvatarWithFallback,
 } from '../components/ui';
-import { FiUsers, FiMapPin, FiLoader } from 'react-icons/fi';
+import { FiUsers, FiMapPin, FiLoader, FiUserCheck, FiDownload, FiUpload, FiFileText } from 'react-icons/fi';
 import {
   fetchUsers,
   createUser,
@@ -25,6 +26,7 @@ import {
 } from '../store/usersSlice';
 import { fetchCampuses } from '../store/campusesSlice';
 import { fetchRoles } from '../store/masterSlice';
+import { evaluationsAPI } from '../services/api';
 
 const Employees = () => {
   const navigate = useNavigate();
@@ -32,6 +34,7 @@ const Employees = () => {
   const { data: users, pagination, loading, error, success, stats } = useSelector((state) => state.users);
   const { data: campuses } = useSelector((state) => state.campuses);
   const { roles } = useSelector((state) => state.master);
+  const fileInputRef = useRef(null);
 
   const [searchValue, setSearchValue] = useState('');
   const [filterValues, setFilterValues] = useState({});
@@ -43,12 +46,23 @@ const Employees = () => {
   const [formData, setFormData] = useState({
     full_name: '',
     email: '',
-    phone: '',
+    phone_number: '',
+    position: '',
     role_id: '',
     campus_id: '',
     password: '',
     is_active: 1,
   });
+
+  // Import modal state
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importMonth, setImportMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
+  const [importData, setImportData] = useState(null);
+  const [importLoading, setImportLoading] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
 
   const itemsPerPage = 10;
 
@@ -118,12 +132,17 @@ const Employees = () => {
           <AvatarWithFallback src={row.photo_1} alt={value} size={40} />
           <div>
             <p className="font-medium text-gray-800">{value || '-'}</p>
-            <p className="text-xs text-gray-500">{row.email || '-'}</p>
+            <p className="text-xs text-gray-500">{row.position || row.email || '-'}</p>
           </div>
         </div>
       ),
     },
-    { key: 'phone', label: 'Telepon', width: '140px', render: (value) => value || '-' },
+    {
+      key: 'phone_number',
+      label: 'Telepon',
+      width: '140px',
+      render: (value) => value || '-',
+    },
     {
       key: 'role',
       label: 'Role',
@@ -173,7 +192,8 @@ const Employees = () => {
     setFormData({
       full_name: '',
       email: '',
-      phone: '',
+      phone_number: '',
+      position: '',
       role_id: '',
       campus_id: '',
       password: '',
@@ -187,7 +207,8 @@ const Employees = () => {
     setFormData({
       full_name: item.full_name || '',
       email: item.email || '',
-      phone: item.phone || '',
+      phone_number: item.phone_number || '',
+      position: item.position || '',
       role_id: item.role_id?.toString() || '',
       campus_id: item.campus_id?.toString() || '',
       password: '',
@@ -211,7 +232,8 @@ const Employees = () => {
       const submitData = {
         full_name: formData.full_name,
         email: formData.email,
-        phone: formData.phone,
+        phone_number: formData.phone_number,
+        position: formData.position,
         role_id: parseInt(formData.role_id),
         campus_id: parseInt(formData.campus_id),
         is_active: parseInt(formData.is_active),
@@ -255,10 +277,172 @@ const Employees = () => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Stats from API or count from current data
-  const totalEmployees = stats?.total || pagination.total || 0;
-  const activeEmployees = stats?.active || users.filter((e) => e.is_active === 1).length;
-  const unitCount = stats?.unitCount || [...new Set(users.map((e) => e.campus_id).filter(Boolean))].length;
+  // Export evaluation template
+  const handleExportTemplate = async () => {
+    setExportLoading(true);
+    try {
+      const response = await evaluationsAPI.exportTemplate();
+      if (response.data?.success) {
+        const { employees, categories } = response.data.data;
+
+        // Create worksheet data
+        const wsData = [
+          ['Template Penilaian Karyawan'],
+          [''],
+          ['Petunjuk: Isi nilai 1-100 pada kolom kategori penilaian'],
+          [''],
+          ['user_id', 'Nama Karyawan', 'Jabatan', 'Email', ...categories],
+        ];
+
+        employees.forEach((emp) => {
+          wsData.push([
+            emp.user_id,
+            emp.full_name,
+            emp.position,
+            emp.email,
+            emp.Kinerja || '',
+            emp.Kedisiplinan || '',
+            emp.Kerjasama || '',
+            emp.Inisiatif || '',
+            emp['Tanggung Jawab'] || '',
+          ]);
+        });
+
+        // Create workbook and worksheet
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+        // Set column widths
+        ws['!cols'] = [
+          { wch: 20 }, // user_id
+          { wch: 30 }, // Nama
+          { wch: 20 }, // Jabatan
+          { wch: 30 }, // Email
+          { wch: 12 }, // Kinerja
+          { wch: 14 }, // Kedisiplinan
+          { wch: 12 }, // Kerjasama
+          { wch: 12 }, // Inisiatif
+          { wch: 16 }, // Tanggung Jawab
+        ];
+
+        XLSX.utils.book_append_sheet(wb, ws, 'Template Penilaian');
+
+        // Download file
+        const now = new Date();
+        const filename = `Template_Penilaian_${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}.xlsx`;
+        XLSX.writeFile(wb, filename);
+
+        toast.success('Template berhasil didownload');
+      }
+    } catch (err) {
+      console.error('Export error:', err);
+      toast.error('Gagal mengexport template');
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  // Handle file selection for import
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const bstr = evt.target.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const jsonData = XLSX.utils.sheet_to_json(ws, { header: 1 });
+
+        // Find header row (contains 'user_id')
+        let headerRowIndex = -1;
+        for (let i = 0; i < jsonData.length; i++) {
+          if (jsonData[i] && jsonData[i].includes('user_id')) {
+            headerRowIndex = i;
+            break;
+          }
+        }
+
+        if (headerRowIndex === -1) {
+          toast.error('Format file tidak valid. Kolom user_id tidak ditemukan.');
+          return;
+        }
+
+        const headers = jsonData[headerRowIndex];
+        const dataRows = jsonData.slice(headerRowIndex + 1);
+
+        // Parse data
+        const parsedData = dataRows
+          .filter((row) => row && row[0]) // Filter empty rows
+          .map((row) => {
+            const obj = {};
+            headers.forEach((header, idx) => {
+              obj[header] = row[idx] || '';
+            });
+            return obj;
+          });
+
+        setImportData(parsedData);
+        toast.success(`${parsedData.length} data karyawan berhasil dibaca`);
+      } catch (err) {
+        console.error('Parse error:', err);
+        toast.error('Gagal membaca file. Pastikan format file benar.');
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  // Handle import submit
+  const handleImportSubmit = async () => {
+    if (!importMonth) {
+      toast.error('Pilih bulan penilaian terlebih dahulu');
+      return;
+    }
+    if (!importData || importData.length === 0) {
+      toast.error('Upload file template yang sudah diisi');
+      return;
+    }
+
+    setImportLoading(true);
+    try {
+      const response = await evaluationsAPI.importEvaluations({
+        period: importMonth,
+        data: importData,
+      });
+
+      if (response.data?.success) {
+        toast.success(response.data.message);
+        setIsImportModalOpen(false);
+        setImportData(null);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      } else {
+        toast.error(response.data?.message || 'Gagal import data');
+      }
+    } catch (err) {
+      console.error('Import error:', err);
+      toast.error(err.response?.data?.message || 'Gagal import data penilaian');
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
+  // Open import modal
+  const handleOpenImportModal = () => {
+    setImportData(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    setIsImportModalOpen(true);
+  };
+
+  // Stats from API
+  const totalEmployees = stats?.totalUsers || pagination.total || 0;
+  const activeEmployees = stats?.activeUsers || users.filter((e) => e.is_active === 1).length;
+  const unitCount = stats?.usersByCampus?.length || [...new Set(users.map((e) => e.campus_id).filter(Boolean))].length;
 
   return (
     <MainLayout>
@@ -288,7 +472,7 @@ const Employees = () => {
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
           <div className="flex items-center gap-4">
             <div className="bg-green-100 p-3 rounded-xl">
-              <FiUsers className="w-6 h-6 text-green-600" />
+              <FiUserCheck className="w-6 h-6 text-green-600" />
             </div>
             <div>
               <p className="text-2xl font-bold text-gray-800">{activeEmployees}</p>
@@ -309,10 +493,37 @@ const Employees = () => {
         </div>
       </div>
 
+      {/* Import/Export Buttons */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <FiFileText className="w-5 h-5 text-gray-500" />
+            <span className="text-sm font-medium text-gray-700">Template Penilaian Karyawan</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleExportTemplate}
+              disabled={exportLoading}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-green-700 bg-green-50 hover:bg-green-100 rounded-lg transition-colors disabled:opacity-50"
+            >
+              {exportLoading ? <FiLoader className="w-4 h-4 animate-spin" /> : <FiDownload className="w-4 h-4" />}
+              Export Template
+            </button>
+            <button
+              onClick={handleOpenImportModal}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+            >
+              <FiUpload className="w-4 h-4" />
+              Import Penilaian
+            </button>
+          </div>
+        </div>
+      </div>
+
       <SearchFilter
         searchValue={searchValue}
         onSearchChange={setSearchValue}
-        searchPlaceholder="Cari nama atau email karyawan..."
+        searchPlaceholder="Cari nama, email, atau telepon..."
         filters={filters}
         filterValues={filterValues}
         onFilterChange={handleFilterChange}
@@ -348,6 +559,7 @@ const Employees = () => {
         title={selectedItem ? 'Edit Karyawan' : 'Tambah Karyawan'}
         onSubmit={handleSubmit}
         loading={formLoading}
+        size="lg"
       >
         <FormInput
           label="Nama Lengkap"
@@ -364,17 +576,25 @@ const Employees = () => {
             type="email"
             value={formData.email}
             onChange={handleInputChange}
-            placeholder="email@uhamka.ac.id"
+            placeholder="email@domain.com"
             required
           />
           <FormInput
             label="No. Telepon"
-            name="phone"
-            value={formData.phone}
+            name="phone_number"
+            value={formData.phone_number}
             onChange={handleInputChange}
             placeholder="08xxxxxxxxxx"
+            required
           />
         </div>
+        <FormInput
+          label="Jabatan/Posisi"
+          name="position"
+          value={formData.position}
+          onChange={handleInputChange}
+          placeholder="Contoh: Staff IT, Teknisi, dll"
+        />
         <div className="grid grid-cols-2 gap-4">
           <FormInput
             label="Role"
@@ -383,15 +603,17 @@ const Employees = () => {
             value={formData.role_id}
             onChange={handleInputChange}
             options={roleOptions}
+            placeholder="Pilih Role"
             required
           />
           <FormInput
-            label="Unit"
+            label="Unit Penempatan"
             name="campus_id"
             type="select"
             value={formData.campus_id}
             onChange={handleInputChange}
             options={campusOptions}
+            placeholder="Pilih Unit"
             required
           />
         </div>
@@ -402,7 +624,7 @@ const Employees = () => {
             type="password"
             value={formData.password}
             onChange={handleInputChange}
-            placeholder="********"
+            placeholder="Minimal 6 karakter"
             required={!selectedItem}
           />
           <FormInput
@@ -416,6 +638,73 @@ const Employees = () => {
               { value: '0', label: 'Nonaktif' },
             ]}
           />
+        </div>
+      </Modal>
+
+      {/* Import Evaluation Modal */}
+      <Modal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        title="Import Penilaian Karyawan"
+        onSubmit={handleImportSubmit}
+        loading={importLoading}
+        submitText="Import Data"
+        size="md"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Periode Penilaian <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="month"
+              value={importMonth}
+              onChange={(e) => setImportMonth(e.target.value)}
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+            />
+            <p className="text-xs text-gray-500 mt-1">Pilih bulan dan tahun periode penilaian</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Upload File Template <span className="text-red-500">*</span>
+            </label>
+            <div className="border-2 border-dashed border-gray-200 rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={handleFileSelect}
+                className="hidden"
+                id="import-file"
+              />
+              <label htmlFor="import-file" className="cursor-pointer">
+                <FiUpload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                <p className="text-sm text-gray-600">
+                  Klik untuk upload atau drag & drop
+                </p>
+                <p className="text-xs text-gray-400 mt-1">Format: .xlsx, .xls</p>
+              </label>
+            </div>
+            {importData && (
+              <div className="mt-3 p-3 bg-green-50 rounded-lg">
+                <p className="text-sm text-green-700">
+                  {importData.length} data karyawan siap diimport
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="bg-blue-50 rounded-lg p-4">
+            <h4 className="text-sm font-medium text-blue-800 mb-2">Petunjuk:</h4>
+            <ol className="text-xs text-blue-700 space-y-1 list-decimal list-inside">
+              <li>Download template terlebih dahulu dengan klik &quot;Export Template&quot;</li>
+              <li>Isi nilai penilaian (1-100) pada kolom kategori</li>
+              <li>Pilih periode penilaian (bulan/tahun)</li>
+              <li>Upload file template yang sudah diisi</li>
+              <li>Klik &quot;Import Data&quot; untuk menyimpan</li>
+            </ol>
+          </div>
         </div>
       </Modal>
 

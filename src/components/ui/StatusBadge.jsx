@@ -1,4 +1,13 @@
 const StatusBadge = ({ status, type = 'default', size = 'md' }) => {
+  // Map numeric statuses to string statuses (for issue status)
+  const numericStatusMap = {
+    0: 'pending',
+    1: 'in_progress',
+    2: 'resolved',
+    3: 'rejected',
+    4: 'resolved',
+  };
+
   const statusStyles = {
     // General statuses
     active: 'bg-green-100 text-green-700',
@@ -10,8 +19,10 @@ const StatusBadge = ({ status, type = 'default', size = 'md' }) => {
 
     // Issue statuses
     open: 'bg-blue-100 text-blue-700',
-    in_progress: 'bg-yellow-100 text-yellow-700',
+    in_progress: 'bg-blue-100 text-blue-700',
+    diproses: 'bg-blue-100 text-blue-700',
     resolved: 'bg-green-100 text-green-700',
+    selesai: 'bg-green-100 text-green-700',
     closed: 'bg-gray-100 text-gray-700',
 
     // Priority
@@ -49,8 +60,10 @@ const StatusBadge = ({ status, type = 'default', size = 'md' }) => {
     rejected: 'Ditolak',
     cancelled: 'Dibatalkan',
     open: 'Open',
-    in_progress: 'In Progress',
-    resolved: 'Resolved',
+    in_progress: 'Diproses',
+    diproses: 'Diproses',
+    resolved: 'Selesai',
+    selesai: 'Selesai',
     closed: 'Closed',
     low: 'Low',
     medium: 'Medium',
@@ -65,9 +78,19 @@ const StatusBadge = ({ status, type = 'default', size = 'md' }) => {
     partial: 'Sebagian',
   };
 
-  const normalizedStatus = status?.toLowerCase().replace(/\s+/g, '_') || 'default';
+  // Handle numeric status
+  let normalizedStatus = 'default';
+  if (status !== null && status !== undefined) {
+    if (typeof status === 'number' || (typeof status === 'string' && !isNaN(parseInt(status)) && status.match(/^\d+$/))) {
+      const numStatus = parseInt(status);
+      normalizedStatus = numericStatusMap[numStatus] || 'pending';
+    } else if (typeof status === 'string') {
+      normalizedStatus = status.toLowerCase().replace(/\s+/g, '_');
+    }
+  }
+
   const styleClass = statusStyles[normalizedStatus] || statusStyles.default;
-  const label = statusLabels[normalizedStatus] || status;
+  const label = statusLabels[normalizedStatus] || status || '-';
 
   return (
     <span

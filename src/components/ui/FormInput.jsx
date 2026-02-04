@@ -1,4 +1,6 @@
-const FormInput = ({
+import { memo } from 'react';
+
+const FormInput = memo(({
   label,
   type = 'text',
   name,
@@ -18,6 +20,8 @@ const FormInput = ({
     error ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : 'border-gray-200'
   } ${disabled ? 'bg-gray-50 cursor-not-allowed' : 'bg-white'}`;
 
+  const selectClass = `${baseInputClass} appearance-none bg-no-repeat bg-right pr-10 cursor-pointer`;
+
   const renderInput = () => {
     switch (type) {
       case 'textarea':
@@ -35,19 +39,26 @@ const FormInput = ({
 
       case 'select':
         return (
-          <select
-            name={name}
-            value={value}
-            onChange={onChange}
-            disabled={disabled}
-            className={baseInputClass}
-          >
-            {options.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+          <div className="relative">
+            <select
+              name={name}
+              value={value}
+              onChange={onChange}
+              disabled={disabled}
+              className={selectClass}
+              style={{
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
+                backgroundPosition: 'right 0.75rem center',
+                backgroundSize: '1.25rem',
+              }}
+            >
+              {options.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
         );
 
       case 'file':
@@ -106,6 +117,6 @@ const FormInput = ({
       {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
     </div>
   );
-};
+});
 
 export default FormInput;

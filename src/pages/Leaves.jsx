@@ -8,6 +8,7 @@ import {
   SearchFilter,
   StatusBadge,
   PageHeader,
+  ConfirmDialog,
 } from '../components/ui';
 import { FiUser, FiCalendar, FiCheck, FiX, FiLoader } from 'react-icons/fi';
 import { fetchLeaves, approveLeave, rejectLeave, clearDataError, clearDataSuccess } from '../store/dataSlice';
@@ -26,9 +27,22 @@ const Leaves = () => {
   const [isRejectOpen, setIsRejectOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
-  const [dateRange, setDateRange] = useState({
-    start: '',
-    end: '',
+  const [dateRange, setDateRange] = useState(() => {
+    const today = new Date();
+    const endDate = new Date(today);
+    endDate.setDate(endDate.getDate() + 7);
+
+    const formatDate = (date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    return {
+      start: formatDate(today),
+      end: formatDate(endDate),
+    };
   });
 
   const itemsPerPage = 10;
@@ -42,9 +56,9 @@ const Leaves = () => {
   ];
 
   const statuses = [
-    { value: 'pending', label: 'Pending' },
-    { value: 'approved', label: 'Disetujui' },
-    { value: 'rejected', label: 'Ditolak' },
+    { value: 'Pending', label: 'Pending' },
+    { value: 'Approved', label: 'Disetujui' },
+    { value: 'Rejected', label: 'Ditolak' },
   ];
 
   // Load leaves
@@ -243,16 +257,30 @@ const Leaves = () => {
   };
 
   const clearDateRange = () => {
-    setDateRange({ start: '', end: '' });
+    const today = new Date();
+    const endDate = new Date(today);
+    endDate.setDate(endDate.getDate() + 7);
+
+    const formatDate = (date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    setDateRange({
+      start: formatDate(today),
+      end: formatDate(endDate),
+    });
   };
 
-  // Calculate stats
-  const pendingCount = leaves.data.filter(d => d.status === 'pending').length;
-  const approvedCount = leaves.data.filter(d => d.status === 'approved').length;
+  // Calculate stats (status uses capital case: Pending, Approved, Rejected)
+  const pendingCount = leaves.data.filter(d => d.status === 'Pending').length;
+  const approvedCount = leaves.data.filter(d => d.status === 'Approved').length;
 
   // Custom actions for pending items
   const customActions = (item) => {
-    if (item.status === 'pending') {
+    if (item.status === 'Pending') {
       return (
         <div className="flex items-center gap-1">
           <button
@@ -344,8 +372,7 @@ const Leaves = () => {
         filters={filters}
         filterValues={filterValues}
         onFilterChange={handleFilterChange}
-        showExport={true}
-        onExport={() => console.log('Export leaves')}
+        showExport={false}
       />
 
       {loading ? (
@@ -425,7 +452,7 @@ const Leaves = () => {
               </div>
             </div>
 
-            {selectedItem.status === 'pending' && (
+            {selectedItem.status === 'Pending' && (
               <div className="flex gap-3 pt-4">
                 <button
                   onClick={() => handleApprove(selectedItem)}
@@ -448,80 +475,30 @@ const Leaves = () => {
       </Modal>
 
       {/* Approve Confirmation */}
-      <Modal
+      <ConfirmDialog
         isOpen={isApproveOpen}
         onClose={() => setIsApproveOpen(false)}
+        onConfirm={handleConfirmApprove}
         title="Setujui Pengajuan Cuti"
-        size="sm"
-        showFooter={false}
-      >
-        <div className="text-center py-4">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-100 flex items-center justify-center">
-            <FiCheck size={32} className="text-green-600" />
-          </div>
-          <p className="text-gray-600">
-            Apakah Anda yakin ingin menyetujui pengajuan cuti dari <strong>{selectedItem?.user?.full_name}</strong>?
-          </p>
-          <p className="text-sm text-gray-500 mt-2">
-            {getTypeLabel(selectedItem?.leave_type)} - {selectedItem?.total_days || 1} hari
-          </p>
-        </div>
-        <div className="flex gap-3 mt-4">
-          <button
-            onClick={() => setIsApproveOpen(false)}
-            disabled={actionLoading}
-            className="flex-1 px-4 py-2 text-gray-700 font-medium rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors disabled:opacity-50"
-          >
-            Batal
-          </button>
-          <button
-            onClick={handleConfirmApprove}
-            disabled={actionLoading}
-            className="flex-1 px-4 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {actionLoading && <FiLoader className="animate-spin" size={16} />}
-            Ya, Setujui
-          </button>
-        </div>
-      </Modal>
+        message={`Apakah Anda yakin ingin menyetujui pengajuan cuti dari ${selectedItem?.user?.full_name}? (${getTypeLabel(selectedItem?.leave_type)} - ${selectedItem?.total_days || 1} hari)`}
+        confirmText="Ya, Setujui"
+        cancelText="Batal"
+        type="success"
+        loading={actionLoading}
+      />
 
       {/* Reject Confirmation */}
-      <Modal
+      <ConfirmDialog
         isOpen={isRejectOpen}
         onClose={() => setIsRejectOpen(false)}
+        onConfirm={handleConfirmReject}
         title="Tolak Pengajuan Cuti"
-        size="sm"
-        showFooter={false}
-      >
-        <div className="text-center py-4">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-100 flex items-center justify-center">
-            <FiX size={32} className="text-red-600" />
-          </div>
-          <p className="text-gray-600">
-            Apakah Anda yakin ingin menolak pengajuan cuti dari <strong>{selectedItem?.user?.full_name}</strong>?
-          </p>
-          <p className="text-sm text-gray-500 mt-2">
-            {getTypeLabel(selectedItem?.leave_type)} - {selectedItem?.total_days || 1} hari
-          </p>
-        </div>
-        <div className="flex gap-3 mt-4">
-          <button
-            onClick={() => setIsRejectOpen(false)}
-            disabled={actionLoading}
-            className="flex-1 px-4 py-2 text-gray-700 font-medium rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors disabled:opacity-50"
-          >
-            Batal
-          </button>
-          <button
-            onClick={handleConfirmReject}
-            disabled={actionLoading}
-            className="flex-1 px-4 py-2 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {actionLoading && <FiLoader className="animate-spin" size={16} />}
-            Ya, Tolak
-          </button>
-        </div>
-      </Modal>
+        message={`Apakah Anda yakin ingin menolak pengajuan cuti dari ${selectedItem?.user?.full_name}? (${getTypeLabel(selectedItem?.leave_type)} - ${selectedItem?.total_days || 1} hari)`}
+        confirmText="Ya, Tolak"
+        cancelText="Batal"
+        type="danger"
+        loading={actionLoading}
+      />
     </MainLayout>
   );
 };

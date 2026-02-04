@@ -8,12 +8,12 @@ import {
   Modal,
   SearchFilter,
   FormInput,
-  StatusBadge,
   ConfirmDialog,
   PageHeader,
 } from '../../components/ui';
 import { FiLoader, FiUpload, FiX, FiImage } from 'react-icons/fi';
 import { convertToWebP, validateImageFile } from '../../utils/imageUtils';
+import logoFallback from '/logo.png';
 import {
   fetchCategoryItems,
   createCategoryItem,
@@ -23,13 +23,21 @@ import {
   clearMasterSuccess,
 } from '../../store/masterSlice';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
+// Helper function to get category image URL
+const getCategoryImageUrl = (photo) => {
+  if (!photo) return logoFallback;
+  if (photo.startsWith('http://') || photo.startsWith('https://')) return photo;
+  return `${API_BASE_URL.replace('/api/dashboard', '')}/uploads/category_items/${photo}`;
+};
+
 const CategoryItems = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const { categoryItems, loading, error, success } = useSelector((state) => state.master);
 
   const [searchValue, setSearchValue] = useState('');
-  const [filterValues, setFilterValues] = useState({});
   const [currentPage, setCurrentPage] = useState(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
@@ -40,6 +48,11 @@ const CategoryItems = () => {
     type: 'Item',
   });
 
+  const typeOptions = [
+    { value: 'Item', label: 'Item' },
+    { value: 'Billing', label: 'Billing' },
+  ];
+
   // Image states
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState('');
@@ -48,21 +61,15 @@ const CategoryItems = () => {
 
   const itemsPerPage = 10;
 
-  const typeOptions = [
-    { value: 'Item', label: 'Item' },
-    { value: 'Billing', label: 'Billing' },
-  ];
-
   // Load category items
   const loadCategoryItems = useCallback(() => {
     const params = {
       page: currentPage,
       limit: itemsPerPage,
       search: searchValue,
-      ...filterValues,
     };
     dispatch(fetchCategoryItems(params));
-  }, [dispatch, currentPage, itemsPerPage, searchValue, filterValues]);
+  }, [dispatch, currentPage, itemsPerPage, searchValue]);
 
   useEffect(() => {
     loadCategoryItems();
@@ -85,44 +92,55 @@ const CategoryItems = () => {
     }
   }, [success, dispatch, loadCategoryItems]);
 
-  // Reset page when search/filter changes
+  // Reset page when search changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchValue, filterValues]);
+  }, [searchValue]);
 
   const columns = [
-    { key: 'category_item_id', label: 'ID', width: '120px' },
+    {
+      key: 'photo_1',
+      label: 'Foto',
+      width: '80px',
+      render: (value) => (
+        <img
+          src={getCategoryImageUrl(value)}
+          alt="Kategori"
+          className="w-12 h-12 object-cover rounded-lg border border-gray-200"
+          onError={(e) => { e.target.src = logoFallback; }}
+        />
+      ),
+    },
+    {
+      key: 'category_item_id',
+      label: 'ID',
+      width: '140px',
+      render: (value) => <span className="font-mono text-xs">{value}</span>,
+    },
     { key: 'category_item_name', label: 'Nama Kategori' },
     {
       key: 'type',
       label: 'Tipe',
       width: '100px',
       render: (value) => (
-        <StatusBadge
-          status={value === 'Item' ? 'info' : 'warning'}
-          label={value}
-        />
+        <span className={`inline-flex items-center whitespace-nowrap px-2.5 py-1 rounded-full text-xs font-medium ${
+          value === 'Item' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'
+        }`}>
+          {value || '-'}
+        </span>
       ),
     },
     {
       key: 'itemCount',
       label: 'Jumlah Item',
       width: '120px',
-      render: (value) => value || 0,
+      render: (value) => (
+        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-teal-100 text-teal-700">
+          {value || 0} Item
+        </span>
+      ),
     },
   ];
-
-  const filters = [
-    {
-      key: 'type',
-      label: 'Tipe',
-      options: typeOptions,
-    },
-  ];
-
-  const handleFilterChange = (key, value) => {
-    setFilterValues((prev) => ({ ...prev, [key]: value }));
-  };
 
   const resetForm = () => {
     setFormData({
@@ -145,7 +163,7 @@ const CategoryItems = () => {
       category_item_name: item.category_item_name || '',
       type: item.type || 'Item',
     });
-    setPhotoPreview(item.photo_1 || '');
+    setPhotoPreview(item.photo_1 ? getCategoryImageUrl(item.photo_1) : '');
     setPhotoFile(null);
     setIsModalOpen(true);
   };
@@ -192,20 +210,15 @@ const CategoryItems = () => {
     if (photoInputRef.current) photoInputRef.current.value = '';
   };
 
-  const validateForm = () => {
+  const handleSubmit = async () => {
     if (!formData.category_item_name.trim()) {
       toast.error('Nama kategori wajib diisi');
-      return false;
+      return;
     }
     if (!formData.type) {
       toast.error('Tipe kategori wajib dipilih');
-      return false;
+      return;
     }
-    return true;
-  };
-
-  const handleSubmit = async () => {
-    if (!validateForm()) return;
 
     setFormLoading(true);
     try {
@@ -260,10 +273,7 @@ const CategoryItems = () => {
       <SearchFilter
         searchValue={searchValue}
         onSearchChange={setSearchValue}
-        searchPlaceholder="Cari nama atau kode kategori..."
-        filters={filters}
-        filterValues={filterValues}
-        onFilterChange={handleFilterChange}
+        searchPlaceholder="Cari nama kategori..."
         onAdd={handleAdd}
         addLabel="Tambah Kategori"
       />
@@ -279,9 +289,9 @@ const CategoryItems = () => {
           onView={handleView}
           onEdit={handleEdit}
           onDelete={handleDelete}
-          currentPage={categoryItems.pagination.page}
-          totalPages={categoryItems.pagination.totalPages}
-          totalItems={categoryItems.pagination.total}
+          currentPage={categoryItems.pagination?.page || 1}
+          totalPages={categoryItems.pagination?.totalPages || 1}
+          totalItems={categoryItems.pagination?.total || 0}
           itemsPerPage={itemsPerPage}
           onPageChange={setCurrentPage}
           showActions={true}
@@ -326,6 +336,7 @@ const CategoryItems = () => {
                   src={photoPreview}
                   alt="Preview"
                   className="w-full h-40 object-cover rounded-lg border border-gray-200"
+                  onError={(e) => { e.target.src = logoFallback; }}
                 />
                 <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-2">
                   <button

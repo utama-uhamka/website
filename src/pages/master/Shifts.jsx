@@ -7,11 +7,10 @@ import {
   Modal,
   SearchFilter,
   FormInput,
-  StatusBadge,
   ConfirmDialog,
   PageHeader,
 } from '../../components/ui';
-import { FiLoader } from 'react-icons/fi';
+import { FiLoader, FiClock } from 'react-icons/fi';
 import {
   fetchShifts,
   createShift,
@@ -21,24 +20,47 @@ import {
   clearMasterSuccess,
 } from '../../store/masterSlice';
 
+// Helper to format time for display
+const formatTime = (time) => {
+  if (!time) return '-';
+  // If already in HH:mm format, return as is
+  if (time.length === 5) return time;
+  // If in HH:mm:ss format, trim seconds
+  return time.substring(0, 5);
+};
+
+// Helper to calculate duration between two times
+const calculateDuration = (start, end) => {
+  if (!start || !end) return '-';
+  const [startH, startM] = start.split(':').map(Number);
+  const [endH, endM] = end.split(':').map(Number);
+
+  let totalMinutes = (endH * 60 + endM) - (startH * 60 + startM);
+  // Handle overnight shifts
+  if (totalMinutes < 0) totalMinutes += 24 * 60;
+
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (hours > 0 && minutes > 0) return `${hours}j ${minutes}m`;
+  if (hours > 0) return `${hours} jam`;
+  return `${minutes} menit`;
+};
+
 const Shifts = () => {
   const dispatch = useDispatch();
   const { shifts, loading, error, success } = useSelector((state) => state.master);
 
   const [searchValue, setSearchValue] = useState('');
-  const [filterValues, setFilterValues] = useState({});
   const [currentPage, setCurrentPage] = useState(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formData, setFormData] = useState({
-    shift_name: '',
-    start_time: '',
-    end_time: '',
-    break_duration: '',
-    description: '',
-    is_active: 1,
+    name: '',
+    timeStart: '',
+    timeEnd: '',
   });
 
   const itemsPerPage = 10;
@@ -49,10 +71,9 @@ const Shifts = () => {
       page: currentPage,
       limit: itemsPerPage,
       search: searchValue,
-      ...filterValues,
     };
     dispatch(fetchShifts(params));
-  }, [dispatch, currentPage, itemsPerPage, searchValue, filterValues]);
+  }, [dispatch, currentPage, itemsPerPage, searchValue]);
 
   useEffect(() => {
     loadShifts();
@@ -75,69 +96,68 @@ const Shifts = () => {
     }
   }, [success, dispatch, loadShifts]);
 
-  // Reset page when search/filter changes
+  // Reset page when search changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchValue, filterValues]);
+  }, [searchValue]);
 
   const columns = [
-    { key: 'shift_name', label: 'Nama Shift' },
     {
-      key: 'start_time',
-      label: 'Jam Mulai',
-      width: '100px',
-      render: (value) => <span className="font-medium">{value || '-'}</span>,
-    },
-    {
-      key: 'end_time',
-      label: 'Jam Selesai',
-      width: '100px',
-      render: (value) => <span className="font-medium">{value || '-'}</span>,
-    },
-    {
-      key: 'break_duration',
-      label: 'Istirahat',
-      width: '100px',
-      render: (value) => value ? `${value} menit` : '-',
-    },
-    {
-      key: 'user_count',
-      label: 'Jumlah User',
+      key: 'shift_id',
+      label: 'ID',
       width: '120px',
-      render: (value) => value || 0,
+      render: (value) => <span className="font-mono text-xs">{value}</span>,
     },
     {
-      key: 'is_active',
-      label: 'Status',
+      key: 'name',
+      label: 'Nama Shift',
+      render: (value) => (
+        <div className="flex items-center gap-2">
+          <div className="p-1.5 bg-primary/10 rounded-lg">
+            <FiClock className="w-4 h-4 text-primary" />
+          </div>
+          <span className="font-medium">{value}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'timeStart',
+      label: 'Jam Mulai',
+      width: '120px',
+      render: (value) => (
+        <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-sm font-medium bg-green-50 text-green-700">
+          {formatTime(value)}
+        </span>
+      ),
+    },
+    {
+      key: 'timeEnd',
+      label: 'Jam Selesai',
+      width: '120px',
+      render: (value) => (
+        <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-sm font-medium bg-red-50 text-red-700">
+          {formatTime(value)}
+        </span>
+      ),
+    },
+    {
+      key: 'duration',
+      label: 'Durasi',
       width: '100px',
-      render: (value) => <StatusBadge status={value === 1 ? 'active' : 'inactive'} />,
+      render: (_, row) => (
+        <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-sm font-medium bg-blue-50 text-blue-700">
+          {calculateDuration(row.timeStart, row.timeEnd)}
+        </span>
+      ),
     },
   ];
-
-  const filters = [
-    {
-      key: 'is_active',
-      label: 'Status',
-      options: [
-        { value: '1', label: 'Aktif' },
-        { value: '0', label: 'Nonaktif' },
-      ],
-    },
-  ];
-
-  const handleFilterChange = (key, value) => {
-    setFilterValues((prev) => ({ ...prev, [key]: value }));
-  };
 
   const handleAdd = () => {
     setSelectedItem(null);
     setFormData({
-      shift_name: '',
-      start_time: '',
-      end_time: '',
-      break_duration: '',
-      description: '',
-      is_active: 1,
+      name: '',
+      timeStart: '',
+      timeEnd: '',
     });
     setIsModalOpen(true);
   };
@@ -145,12 +165,9 @@ const Shifts = () => {
   const handleEdit = (item) => {
     setSelectedItem(item);
     setFormData({
-      shift_name: item.shift_name || '',
-      start_time: item.start_time || '',
-      end_time: item.end_time || '',
-      break_duration: item.break_duration?.toString() || '',
-      description: item.description || '',
-      is_active: item.is_active,
+      name: item.name || '',
+      timeStart: formatTime(item.timeStart) || '',
+      timeEnd: formatTime(item.timeEnd) || '',
     });
     setIsModalOpen(true);
   };
@@ -161,12 +178,21 @@ const Shifts = () => {
   };
 
   const handleSubmit = async () => {
+    if (!formData.name.trim()) {
+      toast.error('Nama shift wajib diisi');
+      return;
+    }
+    if (!formData.timeStart || !formData.timeEnd) {
+      toast.error('Jam mulai dan jam selesai wajib diisi');
+      return;
+    }
+
     setFormLoading(true);
     try {
       const submitData = {
-        ...formData,
-        break_duration: formData.break_duration ? parseInt(formData.break_duration) : null,
-        is_active: parseInt(formData.is_active),
+        name: formData.name,
+        timeStart: formData.timeStart,
+        timeEnd: formData.timeEnd,
       };
 
       if (selectedItem) {
@@ -203,7 +229,7 @@ const Shifts = () => {
         subtitle="Kelola jadwal shift karyawan"
         breadcrumbs={[
           { label: 'Dashboard', path: '/dashboard' },
-          { label: 'User Management', path: null },
+          { label: 'Master Data', path: null },
           { label: 'Shift' },
         ]}
       />
@@ -212,9 +238,6 @@ const Shifts = () => {
         searchValue={searchValue}
         onSearchChange={setSearchValue}
         searchPlaceholder="Cari nama shift..."
-        filters={filters}
-        filterValues={filterValues}
-        onFilterChange={handleFilterChange}
         onAdd={handleAdd}
         addLabel="Tambah Shift"
       />
@@ -229,9 +252,9 @@ const Shifts = () => {
           data={shifts.data}
           onEdit={handleEdit}
           onDelete={handleDelete}
-          currentPage={shifts.pagination.page}
-          totalPages={shifts.pagination.totalPages}
-          totalItems={shifts.pagination.total}
+          currentPage={shifts.pagination?.page || 1}
+          totalPages={shifts.pagination?.totalPages || 1}
+          totalItems={shifts.pagination?.total || 0}
           itemsPerPage={itemsPerPage}
           onPageChange={setCurrentPage}
         />
@@ -247,8 +270,8 @@ const Shifts = () => {
       >
         <FormInput
           label="Nama Shift"
-          name="shift_name"
-          value={formData.shift_name}
+          name="name"
+          value={formData.name}
           onChange={handleInputChange}
           placeholder="Contoh: Shift Pagi"
           required
@@ -256,48 +279,28 @@ const Shifts = () => {
         <div className="grid grid-cols-2 gap-4">
           <FormInput
             label="Jam Mulai"
-            name="start_time"
+            name="timeStart"
             type="time"
-            value={formData.start_time}
+            value={formData.timeStart}
             onChange={handleInputChange}
             required
           />
           <FormInput
             label="Jam Selesai"
-            name="end_time"
+            name="timeEnd"
             type="time"
-            value={formData.end_time}
+            value={formData.timeEnd}
             onChange={handleInputChange}
             required
           />
         </div>
-        <FormInput
-          label="Durasi Istirahat (menit)"
-          name="break_duration"
-          type="number"
-          value={formData.break_duration}
-          onChange={handleInputChange}
-          placeholder="Contoh: 60"
-        />
-        <FormInput
-          label="Deskripsi"
-          name="description"
-          type="textarea"
-          value={formData.description}
-          onChange={handleInputChange}
-          placeholder="Deskripsi shift"
-        />
-        <FormInput
-          label="Status"
-          name="is_active"
-          type="select"
-          value={formData.is_active?.toString()}
-          onChange={(e) => setFormData((prev) => ({ ...prev, is_active: parseInt(e.target.value) }))}
-          options={[
-            { value: '1', label: 'Aktif' },
-            { value: '0', label: 'Nonaktif' },
-          ]}
-        />
+        {formData.timeStart && formData.timeEnd && (
+          <div className="p-3 bg-blue-50 rounded-lg">
+            <p className="text-sm text-blue-700">
+              <span className="font-medium">Durasi Shift:</span> {calculateDuration(formData.timeStart, formData.timeEnd)}
+            </p>
+          </div>
+        )}
       </Modal>
 
       {/* Delete Confirmation */}
@@ -306,7 +309,7 @@ const Shifts = () => {
         onClose={() => setIsDeleteOpen(false)}
         onConfirm={handleConfirmDelete}
         title="Hapus Shift"
-        message={`Apakah Anda yakin ingin menghapus "${selectedItem?.shift_name}"? User yang terdaftar di shift ini akan perlu dipindahkan.`}
+        message={`Apakah Anda yakin ingin menghapus shift "${selectedItem?.name}"?`}
         confirmText="Ya, Hapus"
         type="danger"
         loading={loading}

@@ -62,6 +62,10 @@ export const usersAPI = {
   update: (id, data) => api.put(`/users/${id}`, data),
   delete: (id) => api.delete(`/users/${id}`),
   getStats: () => api.get('/users/stats'),
+  // User Shift Schedule
+  getShifts: (userId) => api.get(`/users/${userId}/shifts`),
+  updateShift: (userId, data) => api.put(`/users/${userId}/shifts`, data),
+  bulkUpdateShifts: (userId, schedules) => api.put(`/users/${userId}/shifts/bulk`, { schedules }),
 };
 
 // Campuses API
@@ -136,8 +140,12 @@ export const itemsAPI = {
 export const categoryItemsAPI = {
   getAll: (params) => api.get('/category-items', { params }),
   getById: (id) => api.get(`/category-items/${id}`),
-  create: (data) => api.post('/category-items', data),
-  update: (id, data) => api.put(`/category-items/${id}`, data),
+  create: (data) => api.post('/category-items', data, {
+    headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : {},
+  }),
+  update: (id, data) => api.put(`/category-items/${id}`, data, {
+    headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : {},
+  }),
   delete: (id) => api.delete(`/category-items/${id}`),
 };
 
@@ -154,7 +162,9 @@ export const accountsAPI = {
 export const attendancesAPI = {
   getAll: (params) => api.get('/attendances', { params }),
   getById: (id) => api.get(`/attendances/${id}`),
+  getStats: (params) => api.get('/attendances/stats', { params }),
   getTodayStats: () => api.get('/attendances/today-stats'),
+  getGrouped: (params) => api.get('/attendances/grouped', { params }),
 };
 
 // Events API
@@ -240,6 +250,8 @@ export const evaluationsAPI = {
   update: (id, data) => api.put(`/evaluations/${id}`, data),
   delete: (id) => api.delete(`/evaluations/${id}`),
   getStats: () => api.get('/evaluations/stats'),
+  exportTemplate: (period) => api.get('/evaluations/export-template', { params: { period } }),
+  importEvaluations: (data) => api.post('/evaluations/import', data),
 };
 
 // Activities API

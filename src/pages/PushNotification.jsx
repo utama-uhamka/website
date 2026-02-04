@@ -407,7 +407,7 @@ const PushNotification = () => {
           totalItems={pagination.total}
           itemsPerPage={itemsPerPage}
           onPageChange={setCurrentPage}
-          showEdit={false}
+          actionColumn={{ edit: false, delete: true, view: false }}
         />
       )}
 

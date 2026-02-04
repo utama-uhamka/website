@@ -119,6 +119,12 @@ const Campuses = () => {
     { key: 'campus_id', label: 'ID', width: '120px' },
     { key: 'campus_name', label: 'Nama Unit' },
     { key: 'alamat', label: 'Alamat' },
+    {
+      key: 'buildingCount',
+      label: 'Total Gedung',
+      width: '120px',
+      render: (value) => value || 0,
+    },
   ];
 
   const filters = [];

@@ -7,11 +7,10 @@ import {
   Modal,
   SearchFilter,
   FormInput,
-  StatusBadge,
   ConfirmDialog,
   PageHeader,
 } from '../../components/ui';
-import { FiLoader } from 'react-icons/fi';
+import { FiLoader, FiLock } from 'react-icons/fi';
 import {
   fetchRoles,
   createRole,
@@ -21,12 +20,14 @@ import {
   clearMasterSuccess,
 } from '../../store/masterSlice';
 
+// Protected role IDs that cannot be deleted
+const PROTECTED_ROLE_IDS = [1, 2, 3, 4];
+
 const Roles = () => {
   const dispatch = useDispatch();
   const { roles, loading, error, success } = useSelector((state) => state.master);
 
   const [searchValue, setSearchValue] = useState('');
-  const [filterValues, setFilterValues] = useState({});
   const [currentPage, setCurrentPage] = useState(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
@@ -35,7 +36,6 @@ const Roles = () => {
   const [formData, setFormData] = useState({
     role_name: '',
     description: '',
-    is_active: 1,
   });
 
   const itemsPerPage = 10;
@@ -46,10 +46,9 @@ const Roles = () => {
       page: currentPage,
       limit: itemsPerPage,
       search: searchValue,
-      ...filterValues,
     };
     dispatch(fetchRoles(params));
-  }, [dispatch, currentPage, itemsPerPage, searchValue, filterValues]);
+  }, [dispatch, currentPage, itemsPerPage, searchValue]);
 
   useEffect(() => {
     loadRoles();
@@ -72,46 +71,42 @@ const Roles = () => {
     }
   }, [success, dispatch, loadRoles]);
 
-  // Reset page when search/filter changes
+  // Reset page when search changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchValue, filterValues]);
+  }, [searchValue]);
 
   const columns = [
-    { key: 'role_name', label: 'Nama Role' },
-    { key: 'description', label: 'Deskripsi' },
     {
-      key: 'user_count',
+      key: 'role_id',
+      label: 'ID',
+      width: '80px',
+      render: (value) => (
+        <div className="flex items-center gap-2">
+          <span className="font-mono">{value}</span>
+          {PROTECTED_ROLE_IDS.includes(value) && (
+            <FiLock className="w-3.5 h-3.5 text-gray-400" title="Role ini tidak dapat dihapus" />
+          )}
+        </div>
+      ),
+    },
+    { key: 'role_name', label: 'Nama Role' },
+    { key: 'description', label: 'Deskripsi', render: (value) => value || '-' },
+    {
+      key: 'userCount',
       label: 'Jumlah User',
       width: '120px',
-      render: (value) => value || 0,
-    },
-    {
-      key: 'is_active',
-      label: 'Status',
-      width: '100px',
-      render: (value) => <StatusBadge status={value === 1 ? 'active' : 'inactive'} />,
+      render: (value) => (
+        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
+          {value || 0} User
+        </span>
+      ),
     },
   ];
-
-  const filters = [
-    {
-      key: 'is_active',
-      label: 'Status',
-      options: [
-        { value: '1', label: 'Aktif' },
-        { value: '0', label: 'Nonaktif' },
-      ],
-    },
-  ];
-
-  const handleFilterChange = (key, value) => {
-    setFilterValues((prev) => ({ ...prev, [key]: value }));
-  };
 
   const handleAdd = () => {
     setSelectedItem(null);
-    setFormData({ role_name: '', description: '', is_active: 1 });
+    setFormData({ role_name: '', description: '' });
     setIsModalOpen(true);
   };
 
@@ -120,28 +115,32 @@ const Roles = () => {
     setFormData({
       role_name: item.role_name || '',
       description: item.description || '',
-      is_active: item.is_active,
     });
     setIsModalOpen(true);
   };
 
   const handleDelete = (item) => {
+    // Check if role is protected
+    if (PROTECTED_ROLE_IDS.includes(item.role_id)) {
+      toast.error('Role ini tidak dapat dihapus karena merupakan role default sistem');
+      return;
+    }
     setSelectedItem(item);
     setIsDeleteOpen(true);
   };
 
   const handleSubmit = async () => {
+    if (!formData.role_name.trim()) {
+      toast.error('Nama role wajib diisi');
+      return;
+    }
+
     setFormLoading(true);
     try {
-      const submitData = {
-        ...formData,
-        is_active: parseInt(formData.is_active),
-      };
-
       if (selectedItem) {
-        await dispatch(updateRole({ id: selectedItem.role_id, data: submitData })).unwrap();
+        await dispatch(updateRole({ id: selectedItem.role_id, data: formData })).unwrap();
       } else {
-        await dispatch(createRole(submitData)).unwrap();
+        await dispatch(createRole(formData)).unwrap();
       }
       setIsModalOpen(false);
     } catch (err) {
@@ -165,6 +164,9 @@ const Roles = () => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  // Custom check for delete button visibility
+  const canDelete = (item) => !PROTECTED_ROLE_IDS.includes(item.role_id);
+
   return (
     <MainLayout>
       <PageHeader
@@ -181,9 +183,6 @@ const Roles = () => {
         searchValue={searchValue}
         onSearchChange={setSearchValue}
         searchPlaceholder="Cari nama role..."
-        filters={filters}
-        filterValues={filterValues}
-        onFilterChange={handleFilterChange}
         onAdd={handleAdd}
         addLabel="Tambah Role"
       />
@@ -203,6 +202,7 @@ const Roles = () => {
           totalItems={roles.pagination.total}
           itemsPerPage={itemsPerPage}
           onPageChange={setCurrentPage}
+          canDelete={canDelete}
         />
       )}
 
@@ -220,7 +220,7 @@ const Roles = () => {
           name="role_name"
           value={formData.role_name}
           onChange={handleInputChange}
-          placeholder="Contoh: Admin"
+          placeholder="Contoh: Manager"
           required
         />
         <FormInput
@@ -230,17 +230,6 @@ const Roles = () => {
           value={formData.description}
           onChange={handleInputChange}
           placeholder="Deskripsi role dan tanggung jawabnya"
-        />
-        <FormInput
-          label="Status"
-          name="is_active"
-          type="select"
-          value={formData.is_active?.toString()}
-          onChange={(e) => setFormData((prev) => ({ ...prev, is_active: parseInt(e.target.value) }))}
-          options={[
-            { value: '1', label: 'Aktif' },
-            { value: '0', label: 'Nonaktif' },
-          ]}
         />
       </Modal>
 

@@ -1,4 +1,4 @@
-import { FiAlertTriangle, FiX } from 'react-icons/fi';
+import { FiAlertTriangle, FiX, FiCheck } from 'react-icons/fi';
 
 const ConfirmDialog = ({
   isOpen,
@@ -25,6 +25,10 @@ const ConfirmDialog = ({
     info: {
       icon: 'bg-blue-100 text-blue-600',
       button: 'bg-blue-600 hover:bg-blue-700',
+    },
+    success: {
+      icon: 'bg-green-100 text-green-600',
+      button: 'bg-green-600 hover:bg-green-700',
     },
   };
 
@@ -55,7 +59,7 @@ const ConfirmDialog = ({
             <div
               className={`mx-auto w-14 h-14 rounded-full flex items-center justify-center mb-4 ${styles.icon}`}
             >
-              <FiAlertTriangle size={28} />
+              {type === 'success' ? <FiCheck size={28} /> : <FiAlertTriangle size={28} />}
             </div>
             <h3 className="text-lg font-semibold text-gray-800 mb-2">{title}</h3>
             <p className="text-gray-600 mb-6">{message}</p>

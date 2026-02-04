@@ -413,7 +413,7 @@ const UnitDetail = () => {
     { key: 'building_id', label: 'ID', width: '80px' },
     { key: 'building_name', label: 'Nama Gedung' },
     {
-      key: 'floor_count',
+      key: 'floorCount',
       label: 'Lantai',
       width: '80px',
       render: (value) => value || 0,
@@ -469,7 +469,7 @@ const UnitDetail = () => {
         const categoryName = row.category_item?.category_item_name || '';
         const type = categoryName.toUpperCase().includes('PDAM') ? 'PDAM' : 'PLN';
         return (
-          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+          <span className={`inline-flex items-center whitespace-nowrap px-2 py-1 rounded-full text-xs font-medium ${
             type === 'PLN' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
           }`}>
             {type}
@@ -570,9 +570,9 @@ const UnitDetail = () => {
     {
       key: 'category_item',
       label: 'Kategori',
-      width: '120px',
+      width: '140px',
       render: (v, row) => (
-        <span className="px-2 py-1 rounded-full text-xs font-medium bg-teal-100 text-teal-700">
+        <span className="inline-flex items-center whitespace-nowrap px-2 py-1 rounded-full text-xs font-medium bg-teal-100 text-teal-700">
           {row.category_item?.category_item_name || '-'}
         </span>
       ),
@@ -581,9 +581,9 @@ const UnitDetail = () => {
     {
       key: 'item_condition',
       label: 'Kondisi',
-      width: '120px',
+      width: '140px',
       render: (v) => (
-        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+        <span className={`inline-flex items-center whitespace-nowrap px-2 py-1 rounded-full text-xs font-medium ${
           v === 'Baik' ? 'bg-green-100 text-green-700' :
           v === 'Diperbaiki' ? 'bg-blue-100 text-blue-700' :
           v === 'Menunggu Diperbaiki' ? 'bg-yellow-100 text-yellow-700' :

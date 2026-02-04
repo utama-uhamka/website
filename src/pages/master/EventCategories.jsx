@@ -7,7 +7,6 @@ import {
   Modal,
   SearchFilter,
   FormInput,
-  StatusBadge,
   ConfirmDialog,
   PageHeader,
 } from '../../components/ui';
@@ -26,7 +25,6 @@ const EventCategories = () => {
   const { eventCategories, loading, error, success } = useSelector((state) => state.master);
 
   const [searchValue, setSearchValue] = useState('');
-  const [filterValues, setFilterValues] = useState({});
   const [currentPage, setCurrentPage] = useState(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
@@ -34,24 +32,10 @@ const EventCategories = () => {
   const [formLoading, setFormLoading] = useState(false);
   const [formData, setFormData] = useState({
     category_name: '',
-    color: '#4A22AD',
     description: '',
-    is_active: 1,
   });
 
   const itemsPerPage = 10;
-
-  // Predefined colors
-  const colorOptions = [
-    { value: '#4A22AD', label: 'Ungu' },
-    { value: '#2563EB', label: 'Biru' },
-    { value: '#059669', label: 'Hijau' },
-    { value: '#DC2626', label: 'Merah' },
-    { value: '#D97706', label: 'Orange' },
-    { value: '#7C3AED', label: 'Violet' },
-    { value: '#0891B2', label: 'Cyan' },
-    { value: '#6B7280', label: 'Abu-abu' },
-  ];
 
   // Load event categories
   const loadEventCategories = useCallback(() => {
@@ -59,10 +43,9 @@ const EventCategories = () => {
       page: currentPage,
       limit: itemsPerPage,
       search: searchValue,
-      ...filterValues,
     };
     dispatch(fetchEventCategories(params));
-  }, [dispatch, currentPage, itemsPerPage, searchValue, filterValues]);
+  }, [dispatch, currentPage, itemsPerPage, searchValue]);
 
   useEffect(() => {
     loadEventCategories();
@@ -85,59 +68,35 @@ const EventCategories = () => {
     }
   }, [success, dispatch, loadEventCategories]);
 
-  // Reset page when search/filter changes
+  // Reset page when search changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchValue, filterValues]);
+  }, [searchValue]);
 
   const columns = [
     {
-      key: 'color',
-      label: 'Warna',
+      key: 'event_category_id',
+      label: 'ID',
       width: '80px',
-      render: (value) => (
-        <div className="flex items-center justify-center">
-          <div
-            className="w-6 h-6 rounded-full border-2 border-white shadow"
-            style={{ backgroundColor: value || '#6B7280' }}
-          ></div>
-        </div>
-      ),
+      render: (value) => <span className="font-mono">{value}</span>,
     },
     { key: 'category_name', label: 'Nama Kategori' },
-    { key: 'description', label: 'Deskripsi' },
+    { key: 'description', label: 'Deskripsi', render: (value) => value || '-' },
     {
-      key: 'event_count',
+      key: 'eventCount',
       label: 'Jumlah Event',
       width: '120px',
-      render: (value) => value || 0,
-    },
-    {
-      key: 'is_active',
-      label: 'Status',
-      width: '100px',
-      render: (value) => <StatusBadge status={value === 1 ? 'active' : 'inactive'} />,
+      render: (value) => (
+        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+          {value || 0} Event
+        </span>
+      ),
     },
   ];
-
-  const filters = [
-    {
-      key: 'is_active',
-      label: 'Status',
-      options: [
-        { value: '1', label: 'Aktif' },
-        { value: '0', label: 'Nonaktif' },
-      ],
-    },
-  ];
-
-  const handleFilterChange = (key, value) => {
-    setFilterValues((prev) => ({ ...prev, [key]: value }));
-  };
 
   const handleAdd = () => {
     setSelectedItem(null);
-    setFormData({ category_name: '', color: '#4A22AD', description: '', is_active: 1 });
+    setFormData({ category_name: '', description: '' });
     setIsModalOpen(true);
   };
 
@@ -145,9 +104,7 @@ const EventCategories = () => {
     setSelectedItem(item);
     setFormData({
       category_name: item.category_name || '',
-      color: item.color || '#4A22AD',
       description: item.description || '',
-      is_active: item.is_active,
     });
     setIsModalOpen(true);
   };
@@ -158,17 +115,17 @@ const EventCategories = () => {
   };
 
   const handleSubmit = async () => {
+    if (!formData.category_name.trim()) {
+      toast.error('Nama kategori wajib diisi');
+      return;
+    }
+
     setFormLoading(true);
     try {
-      const submitData = {
-        ...formData,
-        is_active: parseInt(formData.is_active),
-      };
-
       if (selectedItem) {
-        await dispatch(updateEventCategory({ id: selectedItem.event_category_id, data: submitData })).unwrap();
+        await dispatch(updateEventCategory({ id: selectedItem.event_category_id, data: formData })).unwrap();
       } else {
-        await dispatch(createEventCategory(submitData)).unwrap();
+        await dispatch(createEventCategory(formData)).unwrap();
       }
       setIsModalOpen(false);
     } catch (err) {
@@ -208,9 +165,6 @@ const EventCategories = () => {
         searchValue={searchValue}
         onSearchChange={setSearchValue}
         searchPlaceholder="Cari nama kategori..."
-        filters={filters}
-        filterValues={filterValues}
-        onFilterChange={handleFilterChange}
         onAdd={handleAdd}
         addLabel="Tambah Kategori"
       />
@@ -225,9 +179,9 @@ const EventCategories = () => {
           data={eventCategories.data}
           onEdit={handleEdit}
           onDelete={handleDelete}
-          currentPage={eventCategories.pagination.page}
-          totalPages={eventCategories.pagination.totalPages}
-          totalItems={eventCategories.pagination.total}
+          currentPage={eventCategories.pagination?.page || 1}
+          totalPages={eventCategories.pagination?.totalPages || 1}
+          totalItems={eventCategories.pagination?.total || 0}
           itemsPerPage={itemsPerPage}
           onPageChange={setCurrentPage}
         />
@@ -249,33 +203,6 @@ const EventCategories = () => {
           placeholder="Contoh: Seminar"
           required
         />
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Warna <span className="text-red-500">*</span>
-          </label>
-          <div className="flex items-center gap-3">
-            <div
-              className="w-10 h-10 rounded-lg border-2 border-gray-200"
-              style={{ backgroundColor: formData.color }}
-            ></div>
-            <div className="flex flex-wrap gap-2">
-              {colorOptions.map((color) => (
-                <button
-                  key={color.value}
-                  type="button"
-                  onClick={() => setFormData((prev) => ({ ...prev, color: color.value }))}
-                  className={`w-8 h-8 rounded-lg border-2 transition-all ${
-                    formData.color === color.value
-                      ? 'border-gray-800 scale-110'
-                      : 'border-transparent hover:scale-105'
-                  }`}
-                  style={{ backgroundColor: color.value }}
-                  title={color.label}
-                ></button>
-              ))}
-            </div>
-          </div>
-        </div>
         <FormInput
           label="Deskripsi"
           name="description"
@@ -283,17 +210,6 @@ const EventCategories = () => {
           value={formData.description}
           onChange={handleInputChange}
           placeholder="Deskripsi kategori event"
-        />
-        <FormInput
-          label="Status"
-          name="is_active"
-          type="select"
-          value={formData.is_active?.toString()}
-          onChange={(e) => setFormData((prev) => ({ ...prev, is_active: parseInt(e.target.value) }))}
-          options={[
-            { value: '1', label: 'Aktif' },
-            { value: '0', label: 'Nonaktif' },
-          ]}
         />
       </Modal>
 
