@@ -1,0 +1,2 @@
+File config/serviceAccountKey.json dari Firebase Console, atau
+Environment variables: FIREBASE_PROJECT_ID, FIREBASE_PRIVATE_KEY, FIREBASE_CLIENT_EMAIL

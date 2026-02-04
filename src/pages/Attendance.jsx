@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'react-hot-toast';
+import * as XLSX from 'xlsx';
 import MainLayout from '../layouts/MainLayout';
 import {
   DataTable,
@@ -45,6 +46,9 @@ const Attendance = () => {
   // Modal states
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
+
+  // Export state
+  const [exportLoading, setExportLoading] = useState(false);
 
   const itemsPerPage = 10;
 
@@ -271,6 +275,90 @@ const Attendance = () => {
     return dateRange.start === formatted && dateRange.end === formatted;
   };
 
+  // Export attendance data to Excel
+  const handleExportAttendance = async () => {
+    if (!dateRange.start || !dateRange.end) {
+      toast.error('Pilih rentang tanggal terlebih dahulu');
+      return;
+    }
+
+    setExportLoading(true);
+    try {
+      const params = {
+        page: 1,
+        limit: 10000,
+        start_date: dateRange.start,
+        end_date: dateRange.end,
+      };
+      if (filterValues.user_id) params.user_id = filterValues.user_id;
+      if (searchValue) params.search = searchValue;
+
+      const response = await attendancesAPI.getGrouped(params);
+      const allAttendances = response.data?.data || [];
+
+      if (allAttendances.length === 0) {
+        toast.error('Tidak ada data absensi untuk periode ini');
+        return;
+      }
+
+      // Create worksheet data
+      const wsData = [
+        ['DATA ABSENSI'],
+        [''],
+        ['Periode:', `${dateRange.start} s/d ${dateRange.end}`],
+        ['Tanggal Export:', new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })],
+        [''],
+        ['No', 'Nama Karyawan', 'Jabatan', 'Tanggal', 'Jam Masuk', 'Jam Keluar', 'Status'],
+      ];
+
+      allAttendances.forEach((att, idx) => {
+        const checkInTime = att.checkIn ? new Date(att.checkIn.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-';
+        const checkOutTime = att.checkOut ? new Date(att.checkOut.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-';
+        let status = 'Tidak Hadir';
+        if (att.checkIn && att.checkOut) status = 'Lengkap';
+        else if (att.checkIn) status = 'Belum Pulang';
+
+        wsData.push([
+          idx + 1,
+          att.user?.full_name || '-',
+          att.user?.position || '-',
+          att.date ? new Date(att.date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '-',
+          checkInTime,
+          checkOutTime,
+          status,
+        ]);
+      });
+
+      // Create workbook and worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+      // Set column widths
+      ws['!cols'] = [
+        { wch: 5 },  // No
+        { wch: 30 }, // Nama
+        { wch: 20 }, // Jabatan
+        { wch: 40 }, // Tanggal
+        { wch: 12 }, // Jam Masuk
+        { wch: 12 }, // Jam Keluar
+        { wch: 15 }, // Status
+      ];
+
+      XLSX.utils.book_append_sheet(wb, ws, 'Data Absensi');
+
+      // Download file
+      const filename = `Data_Absensi_${dateRange.start}_${dateRange.end}.xlsx`;
+      XLSX.writeFile(wb, filename);
+
+      toast.success('Data absensi berhasil diexport');
+    } catch (err) {
+      console.error('Export error:', err);
+      toast.error('Gagal mengexport data absensi');
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
   return (
     <MainLayout>
       <PageHeader
@@ -459,7 +547,8 @@ const Attendance = () => {
         filters={filters}
         filterValues={filterValues}
         onFilterChange={handleFilterChange}
-        showExport={false}
+        showExport={true}
+        onExport={handleExportAttendance}
       />
 
       {loading ? (

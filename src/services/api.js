@@ -305,4 +305,18 @@ export const billingsAPI = {
   getStats: () => api.get('/billings/stats'),
 };
 
+// Reports API
+export const reportsAPI = {
+  getCampusReportData: (campusId, params) => api.get(`/reports/campus/${campusId}/data`, { params }),
+  getCampusReportStats: (campusId, params) => api.get(`/reports/campus/${campusId}/stats`, { params }),
+  downloadCampusPdf: (campusId, params) => api.get(`/reports/campus/${campusId}/pdf`, {
+    params,
+    responseType: 'blob',
+  }),
+  downloadCampusPhotos: (campusId, params) => api.get(`/reports/campus/${campusId}/photos`, {
+    params,
+    responseType: 'blob',
+  }),
+};
+
 export default api;

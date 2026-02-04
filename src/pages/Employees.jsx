@@ -26,7 +26,7 @@ import {
 } from '../store/usersSlice';
 import { fetchCampuses } from '../store/campusesSlice';
 import { fetchRoles } from '../store/masterSlice';
-import { evaluationsAPI } from '../services/api';
+import { evaluationsAPI, usersAPI, activitiesAPI, attendancesAPI, leavesAPI, shiftsAPI } from '../services/api';
 
 const Employees = () => {
   const navigate = useNavigate();
@@ -63,6 +63,19 @@ const Employees = () => {
   const [importData, setImportData] = useState(null);
   const [importLoading, setImportLoading] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
+  const [employeeExportLoading, setEmployeeExportLoading] = useState(false);
+
+  // Individual employee export modal state
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [selectedEmployeeForExport, setSelectedEmployeeForExport] = useState(null);
+  const [individualExportLoading, setIndividualExportLoading] = useState(false);
+  const [exportDateRange, setExportDateRange] = useState(() => {
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const formatDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return { start_date: formatDate(firstDay), end_date: formatDate(lastDay) };
+  });
 
   const itemsPerPage = 10;
 
@@ -439,6 +452,254 @@ const Employees = () => {
     setIsImportModalOpen(true);
   };
 
+  // Export employees to Excel
+  const handleExportEmployees = async () => {
+    setEmployeeExportLoading(true);
+    try {
+      // Fetch all employees (use high limit to get all)
+      const params = {
+        page: 1,
+        limit: 10000,
+      };
+      const result = await dispatch(fetchUsers(params)).unwrap();
+      const allEmployees = result.data || [];
+
+      if (allEmployees.length === 0) {
+        toast.error('Tidak ada data karyawan untuk diexport');
+        return;
+      }
+
+      // Create worksheet data
+      const wsData = [
+        ['Data Karyawan'],
+        [''],
+        ['Tanggal Export:', new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })],
+        [''],
+        ['No', 'Nama Lengkap', 'Email', 'Telepon', 'Jabatan', 'Role', 'Unit', 'Status'],
+      ];
+
+      allEmployees.forEach((emp, index) => {
+        wsData.push([
+          index + 1,
+          emp.full_name || '-',
+          emp.email || '-',
+          emp.phone_number || '-',
+          emp.position || '-',
+          emp.role?.role_name || '-',
+          emp.campus?.campus_name || '-',
+          emp.is_active === 1 ? 'Aktif' : 'Nonaktif',
+        ]);
+      });
+
+      // Create workbook and worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+      // Set column widths
+      ws['!cols'] = [
+        { wch: 5 },  // No
+        { wch: 30 }, // Nama Lengkap
+        { wch: 30 }, // Email
+        { wch: 15 }, // Telepon
+        { wch: 20 }, // Jabatan
+        { wch: 15 }, // Role
+        { wch: 25 }, // Unit
+        { wch: 10 }, // Status
+      ];
+
+      XLSX.utils.book_append_sheet(wb, ws, 'Data Karyawan');
+
+      // Download file
+      const now = new Date();
+      const filename = `Data_Karyawan_${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}.xlsx`;
+      XLSX.writeFile(wb, filename);
+
+      toast.success('Data karyawan berhasil diexport');
+
+      // Reload current page data
+      loadUsers();
+    } catch (err) {
+      console.error('Export error:', err);
+      toast.error('Gagal mengexport data karyawan');
+    } finally {
+      setEmployeeExportLoading(false);
+    }
+  };
+
+  // Open export modal for individual employee
+  const handleOpenExportModal = (employee) => {
+    setSelectedEmployeeForExport(employee);
+    // Reset date range to current month
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const formatDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    setExportDateRange({ start_date: formatDate(firstDay), end_date: formatDate(lastDay) });
+    setIsExportModalOpen(true);
+  };
+
+  // Export individual employee data to Excel
+  const handleExportIndividualEmployee = async () => {
+    if (!selectedEmployeeForExport) return;
+    if (!exportDateRange.start_date || !exportDateRange.end_date) {
+      toast.error('Pilih rentang tanggal terlebih dahulu');
+      return;
+    }
+
+    setIndividualExportLoading(true);
+    try {
+      const userId = selectedEmployeeForExport.user_id;
+      const { start_date, end_date } = exportDateRange;
+
+      // Fetch all data in parallel
+      const [activitiesRes, attendancesRes, leavesRes, shiftsRes] = await Promise.all([
+        activitiesAPI.getAll({ user_id: userId, start_date, end_date, limit: 10000 }),
+        attendancesAPI.getGrouped({ user_id: userId, start_date, end_date, limit: 10000 }),
+        leavesAPI.getAll({ user_id: userId, limit: 10000 }),
+        usersAPI.getShifts(userId),
+      ]);
+
+      const activities = activitiesRes.data?.data || [];
+      const attendances = attendancesRes.data?.data || [];
+      const leaves = leavesRes.data?.data || [];
+      const shifts = shiftsRes.data?.data || [];
+
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+
+      // Sheet 1: Info Karyawan
+      const infoData = [
+        ['DATA KARYAWAN'],
+        [''],
+        ['Nama Lengkap', selectedEmployeeForExport.full_name || '-'],
+        ['Email', selectedEmployeeForExport.email || '-'],
+        ['Telepon', selectedEmployeeForExport.phone_number || '-'],
+        ['Jabatan', selectedEmployeeForExport.position || '-'],
+        ['Role', selectedEmployeeForExport.role?.role_name || '-'],
+        ['Unit', selectedEmployeeForExport.campus?.campus_name || '-'],
+        ['Status', selectedEmployeeForExport.is_active === 1 ? 'Aktif' : 'Nonaktif'],
+        [''],
+        ['Periode Export', `${start_date} s/d ${end_date}`],
+        ['Tanggal Export', new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })],
+      ];
+      const wsInfo = XLSX.utils.aoa_to_sheet(infoData);
+      wsInfo['!cols'] = [{ wch: 20 }, { wch: 40 }];
+      XLSX.utils.book_append_sheet(wb, wsInfo, 'Info Karyawan');
+
+      // Sheet 2: Aktivitas
+      const activityData = [
+        ['AKTIVITAS'],
+        [''],
+        ['No', 'Tanggal', 'Judul', 'Lokasi', 'Jam Mulai', 'Jam Selesai', 'Deskripsi'],
+      ];
+      activities.forEach((act, idx) => {
+        activityData.push([
+          idx + 1,
+          act.date ? new Date(act.date).toLocaleDateString('id-ID') : '-',
+          act.title || '-',
+          act.location || '-',
+          act.time_start || '-',
+          act.time_end || '-',
+          act.description || '-',
+        ]);
+      });
+      if (activities.length === 0) {
+        activityData.push(['', 'Tidak ada data aktivitas untuk periode ini']);
+      }
+      const wsActivity = XLSX.utils.aoa_to_sheet(activityData);
+      wsActivity['!cols'] = [{ wch: 5 }, { wch: 15 }, { wch: 30 }, { wch: 20 }, { wch: 12 }, { wch: 12 }, { wch: 40 }];
+      XLSX.utils.book_append_sheet(wb, wsActivity, 'Aktivitas');
+
+      // Sheet 3: Absensi
+      const attendanceData = [
+        ['ABSENSI'],
+        [''],
+        ['No', 'Tanggal', 'Jam Masuk', 'Jam Keluar', 'Status'],
+      ];
+      attendances.forEach((att, idx) => {
+        const checkInTime = att.checkIn ? new Date(att.checkIn.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-';
+        const checkOutTime = att.checkOut ? new Date(att.checkOut.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-';
+        let status = 'Tidak Hadir';
+        if (att.checkIn && att.checkOut) status = 'Lengkap';
+        else if (att.checkIn) status = 'Belum Checkout';
+
+        attendanceData.push([
+          idx + 1,
+          att.date ? new Date(att.date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '-',
+          checkInTime,
+          checkOutTime,
+          status,
+        ]);
+      });
+      if (attendances.length === 0) {
+        attendanceData.push(['', 'Tidak ada data absensi untuk periode ini']);
+      }
+      const wsAttendance = XLSX.utils.aoa_to_sheet(attendanceData);
+      wsAttendance['!cols'] = [{ wch: 5 }, { wch: 40 }, { wch: 12 }, { wch: 12 }, { wch: 15 }];
+      XLSX.utils.book_append_sheet(wb, wsAttendance, 'Absensi');
+
+      // Sheet 4: Cuti
+      const leaveData = [
+        ['CUTI'],
+        [''],
+        ['No', 'Jenis Cuti', 'Tanggal Mulai', 'Tanggal Selesai', 'Alasan', 'Status'],
+      ];
+      leaves.forEach((leave, idx) => {
+        let statusText = 'Menunggu';
+        if (leave.status === 'Approved') statusText = 'Disetujui';
+        else if (leave.status === 'Rejected') statusText = 'Ditolak';
+
+        leaveData.push([
+          idx + 1,
+          leave.leave_type || '-',
+          leave.start_date ? new Date(leave.start_date).toLocaleDateString('id-ID') : '-',
+          leave.end_date ? new Date(leave.end_date).toLocaleDateString('id-ID') : '-',
+          leave.reason || '-',
+          statusText,
+        ]);
+      });
+      if (leaves.length === 0) {
+        leaveData.push(['', 'Tidak ada data cuti']);
+      }
+      const wsLeave = XLSX.utils.aoa_to_sheet(leaveData);
+      wsLeave['!cols'] = [{ wch: 5 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 40 }, { wch: 12 }];
+      XLSX.utils.book_append_sheet(wb, wsLeave, 'Cuti');
+
+      // Sheet 5: Jadwal Shift
+      const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+      const shiftData = [
+        ['JADWAL SHIFT'],
+        [''],
+        ['Hari', 'Nama Shift', 'Jam Kerja'],
+      ];
+      shifts.forEach((schedule) => {
+        shiftData.push([
+          dayNames[schedule.day_of_week] || '-',
+          schedule.shift?.name || 'Libur',
+          schedule.shift ? `${schedule.shift.timeStart} - ${schedule.shift.timeEnd}` : '-',
+        ]);
+      });
+      if (shifts.length === 0) {
+        shiftData.push(['', 'Tidak ada jadwal shift']);
+      }
+      const wsShift = XLSX.utils.aoa_to_sheet(shiftData);
+      wsShift['!cols'] = [{ wch: 12 }, { wch: 25 }, { wch: 20 }];
+      XLSX.utils.book_append_sheet(wb, wsShift, 'Jadwal Shift');
+
+      // Download file
+      const filename = `Data_${selectedEmployeeForExport.full_name?.replace(/\s+/g, '_') || 'Karyawan'}_${start_date}_${end_date}.xlsx`;
+      XLSX.writeFile(wb, filename);
+
+      toast.success('Data karyawan berhasil diexport');
+      setIsExportModalOpen(false);
+    } catch (err) {
+      console.error('Export error:', err);
+      toast.error('Gagal mengexport data karyawan');
+    } finally {
+      setIndividualExportLoading(false);
+    }
+  };
+
   // Stats from API
   const totalEmployees = stats?.totalUsers || pagination.total || 0;
   const activeEmployees = stats?.activeUsers || users.filter((e) => e.is_active === 1).length;
@@ -493,7 +754,7 @@ const Employees = () => {
         </div>
       </div>
 
-      {/* Import/Export Buttons */}
+      {/* Import/Export Penilaian */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -529,6 +790,8 @@ const Employees = () => {
         onFilterChange={handleFilterChange}
         onAdd={handleAdd}
         addLabel="Tambah Karyawan"
+        showExport={true}
+        onExport={handleExportEmployees}
       />
 
       {loading ? (
@@ -549,6 +812,15 @@ const Employees = () => {
           onPageChange={setCurrentPage}
           showActions={true}
           actionColumn={{ view: true, edit: true, delete: true }}
+          customActions={(item) => (
+            <button
+              onClick={() => handleOpenExportModal(item)}
+              className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+              title="Export Data"
+            >
+              <FiDownload size={16} />
+            </button>
+          )}
         />
       )}
 
@@ -704,6 +976,66 @@ const Employees = () => {
               <li>Upload file template yang sudah diisi</li>
               <li>Klik &quot;Import Data&quot; untuk menyimpan</li>
             </ol>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Export Individual Employee Modal */}
+      <Modal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        title={`Export Data - ${selectedEmployeeForExport?.full_name || 'Karyawan'}`}
+        onSubmit={handleExportIndividualEmployee}
+        loading={individualExportLoading}
+        submitText="Export Excel"
+        size="md"
+      >
+        <div className="space-y-4">
+          <div className="bg-gray-50 rounded-lg p-4">
+            <p className="text-sm text-gray-600">
+              Export data karyawan <strong>{selectedEmployeeForExport?.full_name}</strong> ke file Excel.
+              Data yang akan diexport meliputi: Aktivitas, Absensi, Cuti, dan Jadwal Shift.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Rentang Tanggal <span className="text-red-500">*</span>
+            </label>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Dari Tanggal</label>
+                <input
+                  type="date"
+                  value={exportDateRange.start_date}
+                  onChange={(e) => setExportDateRange({ ...exportDateRange, start_date: e.target.value })}
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Sampai Tanggal</label>
+                <input
+                  type="date"
+                  value={exportDateRange.end_date}
+                  onChange={(e) => setExportDateRange({ ...exportDateRange, end_date: e.target.value })}
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              Rentang tanggal berlaku untuk data Aktivitas dan Absensi
+            </p>
+          </div>
+
+          <div className="bg-blue-50 rounded-lg p-4">
+            <h4 className="text-sm font-medium text-blue-800 mb-2">Data yang akan diexport:</h4>
+            <ul className="text-xs text-blue-700 space-y-1 list-disc list-inside">
+              <li>Info Karyawan (profil)</li>
+              <li>Aktivitas (dalam rentang tanggal)</li>
+              <li>Absensi (dalam rentang tanggal)</li>
+              <li>Riwayat Cuti (semua data)</li>
+              <li>Jadwal Shift Mingguan</li>
+            </ul>
           </div>
         </div>
       </Modal>

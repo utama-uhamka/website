@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'react-hot-toast';
+import * as XLSX from 'xlsx';
 import MainLayout from '../layouts/MainLayout';
 import {
   DataTable,
@@ -13,6 +14,7 @@ import {
 import { FiUser, FiCalendar, FiCheck, FiX, FiLoader } from 'react-icons/fi';
 import { fetchLeaves, approveLeave, rejectLeave, clearDataError, clearDataSuccess } from '../store/dataSlice';
 import { fetchUsers } from '../store/usersSlice';
+import { leavesAPI } from '../services/api';
 
 const Leaves = () => {
   const dispatch = useDispatch();
@@ -27,6 +29,7 @@ const Leaves = () => {
   const [isRejectOpen, setIsRejectOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
   const [dateRange, setDateRange] = useState(() => {
     const today = new Date();
     const endDate = new Date(today);
@@ -274,6 +277,92 @@ const Leaves = () => {
     });
   };
 
+  // Export leaves data to Excel
+  const handleExportLeaves = async () => {
+    if (!dateRange.start || !dateRange.end) {
+      toast.error('Pilih rentang tanggal terlebih dahulu');
+      return;
+    }
+
+    setExportLoading(true);
+    try {
+      const params = {
+        page: 1,
+        limit: 10000,
+        start_date: dateRange.start,
+        end_date: dateRange.end,
+        ...filterValues,
+      };
+      if (searchValue) params.search = searchValue;
+
+      const response = await leavesAPI.getAll(params);
+      const allLeaves = response.data?.data || [];
+
+      if (allLeaves.length === 0) {
+        toast.error('Tidak ada data cuti untuk periode ini');
+        return;
+      }
+
+      // Create worksheet data
+      const wsData = [
+        ['DATA PENGAJUAN CUTI'],
+        [''],
+        ['Periode:', `${dateRange.start} s/d ${dateRange.end}`],
+        ['Tanggal Export:', new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })],
+        [''],
+        ['No', 'Nama Karyawan', 'Tipe Cuti', 'Tanggal Mulai', 'Tanggal Selesai', 'Durasi', 'Alasan', 'Status', 'Tanggal Pengajuan'],
+      ];
+
+      allLeaves.forEach((leave, idx) => {
+        let statusText = 'Menunggu';
+        if (leave.status === 'Approved') statusText = 'Disetujui';
+        else if (leave.status === 'Rejected') statusText = 'Ditolak';
+
+        wsData.push([
+          idx + 1,
+          leave.user?.full_name || '-',
+          getTypeLabel(leave.leave_type),
+          leave.start_date ? new Date(leave.start_date).toLocaleDateString('id-ID') : '-',
+          leave.end_date ? new Date(leave.end_date).toLocaleDateString('id-ID') : '-',
+          `${leave.total_days || 1} hari`,
+          leave.reason || '-',
+          statusText,
+          leave.createdAt ? new Date(leave.createdAt).toLocaleDateString('id-ID') : '-',
+        ]);
+      });
+
+      // Create workbook and worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+      // Set column widths
+      ws['!cols'] = [
+        { wch: 5 },  // No
+        { wch: 25 }, // Nama
+        { wch: 15 }, // Tipe
+        { wch: 15 }, // Tanggal Mulai
+        { wch: 15 }, // Tanggal Selesai
+        { wch: 10 }, // Durasi
+        { wch: 40 }, // Alasan
+        { wch: 12 }, // Status
+        { wch: 15 }, // Tanggal Pengajuan
+      ];
+
+      XLSX.utils.book_append_sheet(wb, ws, 'Data Cuti');
+
+      // Download file
+      const filename = `Data_Cuti_${dateRange.start}_${dateRange.end}.xlsx`;
+      XLSX.writeFile(wb, filename);
+
+      toast.success('Data cuti berhasil diexport');
+    } catch (err) {
+      console.error('Export error:', err);
+      toast.error('Gagal mengexport data cuti');
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
   // Calculate stats (status uses capital case: Pending, Approved, Rejected)
   const pendingCount = leaves.data.filter(d => d.status === 'Pending').length;
   const approvedCount = leaves.data.filter(d => d.status === 'Approved').length;
@@ -372,7 +461,8 @@ const Leaves = () => {
         filters={filters}
         filterValues={filterValues}
         onFilterChange={handleFilterChange}
-        showExport={false}
+        showExport={true}
+        onExport={handleExportLeaves}
       />
 
       {loading ? (

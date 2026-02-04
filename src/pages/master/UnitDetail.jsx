@@ -68,6 +68,7 @@ import {
   clearDataError,
   clearDataSuccess,
 } from '../../store/dataSlice';
+import { reportsAPI } from '../../services/api';
 
 const UnitDetail = () => {
   const { id } = useParams();
@@ -85,9 +86,22 @@ const UnitDetail = () => {
 
   const [activeTab, setActiveTab] = useState('gedung');
 
-  // Export modal
+  // Export modal - menggunakan format bulan (month1, year1, month2, year2)
   const [isExportOpen, setIsExportOpen] = useState(false);
-  const [exportData, setExportData] = useState({ start_date: '', end_date: '' });
+  const [exportLoading, setExportLoading] = useState(false);
+  const [photosLoading, setPhotosLoading] = useState(false);
+  const getDefaultExportPeriod = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+    return {
+      month1: String(month).padStart(2, '0'),
+      year1: String(year),
+      month2: String(month).padStart(2, '0'),
+      year2: String(year),
+    };
+  };
+  const [exportData, setExportData] = useState(getDefaultExportPeriod);
 
   // Activity date filter - default to current month
   const getDefaultDateFilter = () => {
@@ -597,12 +611,127 @@ const UnitDetail = () => {
     { key: 'brand', label: 'Merk', width: '100px', render: (v) => v || '-' },
   ];
 
-  // Export handlers
-  const handleExportSubmit = () => {
-    console.log('Export with date range:', exportData);
-    setIsExportOpen(false);
-    setExportData({ start_date: '', end_date: '' });
-    toast.success('Export berhasil diunduh');
+  // Export handlers - Download both PDF and ZIP
+  const handleExportSubmit = async () => {
+    // Validasi input
+    if (!exportData.month1 || !exportData.year1 || !exportData.month2 || !exportData.year2) {
+      toast.error('Periode awal dan akhir harus diisi');
+      return;
+    }
+
+    setExportLoading(true);
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    const campusName = (unitData.campus_name || 'Unit').replace(/\s+/g, '_');
+    const params = {
+      month1: exportData.month1,
+      year1: exportData.year1,
+      month2: exportData.month2,
+      year2: exportData.year2,
+    };
+
+    try {
+      // Download PDF first
+      const pdfResponse = await reportsAPI.downloadCampusPdf(id, params);
+      const pdfBlob = new Blob([pdfResponse.data], { type: 'application/pdf' });
+      const pdfUrl = window.URL.createObjectURL(pdfBlob);
+      const pdfLink = document.createElement('a');
+      pdfLink.href = pdfUrl;
+      const pdfFilename = `Laporan_${campusName}_${monthNames[parseInt(exportData.month1) - 1]}${exportData.year1}-${monthNames[parseInt(exportData.month2) - 1]}${exportData.year2}.pdf`;
+      pdfLink.setAttribute('download', pdfFilename);
+      document.body.appendChild(pdfLink);
+      pdfLink.click();
+      document.body.removeChild(pdfLink);
+      window.URL.revokeObjectURL(pdfUrl);
+
+      // Then download ZIP (photos)
+      try {
+        const zipResponse = await reportsAPI.downloadCampusPhotos(id, params);
+        const zipBlob = new Blob([zipResponse.data], { type: 'application/zip' });
+        const zipUrl = window.URL.createObjectURL(zipBlob);
+        const zipLink = document.createElement('a');
+        zipLink.href = zipUrl;
+        const zipFilename = `Foto_${campusName}_${monthNames[parseInt(exportData.month1) - 1]}${exportData.year1}-${monthNames[parseInt(exportData.month2) - 1]}${exportData.year2}.zip`;
+        zipLink.setAttribute('download', zipFilename);
+        document.body.appendChild(zipLink);
+        zipLink.click();
+        document.body.removeChild(zipLink);
+        window.URL.revokeObjectURL(zipUrl);
+
+        toast.success('Laporan PDF dan Foto berhasil diunduh');
+      } catch (zipError) {
+        // ZIP might fail if no photos, but PDF was successful
+        console.log('No photos available or ZIP error:', zipError);
+        // Parse error message from blob response
+        let errorMsg = 'tidak ada foto untuk periode ini';
+        if (zipError.response?.data instanceof Blob) {
+          try {
+            const text = await zipError.response.data.text();
+            const json = JSON.parse(text);
+            errorMsg = json.message || errorMsg;
+          } catch {
+            // ignore parse error
+          }
+        }
+        toast.success(`Laporan PDF berhasil diunduh (${errorMsg})`);
+      }
+
+      setIsExportOpen(false);
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error(error.response?.data?.message || 'Gagal mengunduh laporan');
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  // Export photos only as ZIP
+  const handleExportPhotos = async () => {
+    if (!exportData.month1 || !exportData.year1 || !exportData.month2 || !exportData.year2) {
+      toast.error('Periode awal dan akhir harus diisi');
+      return;
+    }
+
+    setPhotosLoading(true);
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    const campusName = (unitData.campus_name || 'Unit').replace(/\s+/g, '_');
+
+    try {
+      const response = await reportsAPI.downloadCampusPhotos(id, {
+        month1: exportData.month1,
+        year1: exportData.year1,
+        month2: exportData.month2,
+        year2: exportData.year2,
+      });
+
+      const blob = new Blob([response.data], { type: 'application/zip' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const filename = `Foto_${campusName}_${monthNames[parseInt(exportData.month1) - 1]}${exportData.year1}-${monthNames[parseInt(exportData.month2) - 1]}${exportData.year2}.zip`;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast.success('Foto berhasil diunduh');
+    } catch (error) {
+      console.error('Export photos error:', error);
+      // Handle blob response error - parse JSON from blob
+      if (error.response?.data instanceof Blob) {
+        try {
+          const text = await error.response.data.text();
+          const json = JSON.parse(text);
+          toast.error(json.message || 'Gagal mengunduh foto');
+        } catch {
+          toast.error('Gagal mengunduh foto');
+        }
+      } else {
+        toast.error(error.response?.data?.message || 'Gagal mengunduh foto');
+      }
+    } finally {
+      setPhotosLoading(false);
+    }
   };
 
   // Building handlers
@@ -1573,30 +1702,162 @@ const UnitDetail = () => {
         isOpen={isExportOpen}
         onClose={() => setIsExportOpen(false)}
         title="Export Laporan"
-        onSubmit={handleExportSubmit}
-        submitText="Export"
-        size="sm"
+        showFooter={false}
+        size="md"
       >
         <p className="text-sm text-gray-500 mb-4">
-          Pilih rentang tanggal untuk export laporan unit {unitData.campus_name}
+          Pilih periode untuk export laporan unit <strong>{unitData.campus_name}</strong>
         </p>
-        <div className="grid grid-cols-2 gap-4">
-          <FormInput
-            label="Tanggal Mulai"
-            name="start_date"
-            type="date"
-            value={exportData.start_date}
-            onChange={(e) => setExportData({ ...exportData, start_date: e.target.value })}
-            required
-          />
-          <FormInput
-            label="Tanggal Selesai"
-            name="end_date"
-            type="date"
-            value={exportData.end_date}
-            onChange={(e) => setExportData({ ...exportData, end_date: e.target.value })}
-            required
-          />
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Periode Awal</label>
+            <div className="grid grid-cols-2 gap-3">
+              <FormInput
+                label="Bulan"
+                name="month1"
+                type="select"
+                value={exportData.month1}
+                onChange={(e) => setExportData({ ...exportData, month1: e.target.value })}
+                options={[
+                  { value: '01', label: 'Januari' },
+                  { value: '02', label: 'Februari' },
+                  { value: '03', label: 'Maret' },
+                  { value: '04', label: 'April' },
+                  { value: '05', label: 'Mei' },
+                  { value: '06', label: 'Juni' },
+                  { value: '07', label: 'Juli' },
+                  { value: '08', label: 'Agustus' },
+                  { value: '09', label: 'September' },
+                  { value: '10', label: 'Oktober' },
+                  { value: '11', label: 'November' },
+                  { value: '12', label: 'Desember' },
+                ]}
+                noDefaultOption
+                required
+              />
+              <FormInput
+                label="Tahun"
+                name="year1"
+                type="number"
+                value={exportData.year1}
+                onChange={(e) => setExportData({ ...exportData, year1: e.target.value })}
+                placeholder="2024"
+                min="2020"
+                max="2099"
+                required
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Periode Akhir</label>
+            <div className="grid grid-cols-2 gap-3">
+              <FormInput
+                label="Bulan"
+                name="month2"
+                type="select"
+                value={exportData.month2}
+                onChange={(e) => setExportData({ ...exportData, month2: e.target.value })}
+                options={[
+                  { value: '01', label: 'Januari' },
+                  { value: '02', label: 'Februari' },
+                  { value: '03', label: 'Maret' },
+                  { value: '04', label: 'April' },
+                  { value: '05', label: 'Mei' },
+                  { value: '06', label: 'Juni' },
+                  { value: '07', label: 'Juli' },
+                  { value: '08', label: 'Agustus' },
+                  { value: '09', label: 'September' },
+                  { value: '10', label: 'Oktober' },
+                  { value: '11', label: 'November' },
+                  { value: '12', label: 'Desember' },
+                ]}
+                noDefaultOption
+                required
+              />
+              <FormInput
+                label="Tahun"
+                name="year2"
+                type="number"
+                value={exportData.year2}
+                onChange={(e) => setExportData({ ...exportData, year2: e.target.value })}
+                placeholder="2024"
+                min="2020"
+                max="2099"
+                required
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Info box */}
+        <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+          <p className="text-sm text-blue-700 font-medium mb-2">
+            File yang akan diunduh:
+          </p>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-xs text-blue-600 font-medium">📄 Laporan PDF</p>
+              <ul className="text-xs text-blue-500 mt-1 list-disc list-inside">
+                <li>Ringkasan Kegiatan</li>
+                <li>Laporan Harian Teknisi</li>
+                <li>Daftar Event</li>
+                <li>Laporan PLN & PDAM</li>
+              </ul>
+            </div>
+            <div>
+              <p className="text-xs text-green-600 font-medium">📦 Foto ZIP</p>
+              <ul className="text-xs text-green-500 mt-1 list-disc list-inside">
+                <li>Foto Kegiatan Teknisi</li>
+                <li>Foto Event/Acara</li>
+                <li>Terorganisir per folder</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Custom footer with download buttons */}
+        <div className="mt-6 flex justify-end gap-3 pt-4 border-t">
+          <button
+            type="button"
+            onClick={() => setIsExportOpen(false)}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+          >
+            Batal
+          </button>
+          <button
+            type="button"
+            onClick={handleExportPhotos}
+            disabled={photosLoading || exportLoading}
+            className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {photosLoading ? (
+              <>
+                <span className="animate-spin">⏳</span>
+                Mengunduh...
+              </>
+            ) : (
+              <>
+                📦 Download Foto
+              </>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={handleExportSubmit}
+            disabled={exportLoading || photosLoading}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {exportLoading ? (
+              <>
+                <span className="animate-spin">⏳</span>
+                Mengunduh...
+              </>
+            ) : (
+              <>
+                📥 Download Laporan
+              </>
+            )}
+          </button>
         </div>
       </Modal>
 
