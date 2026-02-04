@@ -12,6 +12,7 @@ const FormInput = ({
   rows = 3,
   className = '',
   helperText,
+  noDefaultOption = false, // Skip adding default "Pilih..." option
 }) => {
   const baseInputClass = `w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors ${
     error ? 'border-red-300 focus:border-red-500 focus:ring-red-200' : 'border-gray-200'
@@ -41,7 +42,6 @@ const FormInput = ({
             disabled={disabled}
             className={baseInputClass}
           >
-            <option value="">{placeholder || 'Pilih...'}</option>
             {options.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}

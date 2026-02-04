@@ -121,8 +121,12 @@ export const roomsAPI = {
 export const itemsAPI = {
   getAll: (params) => api.get('/items', { params }),
   getById: (id) => api.get(`/items/${id}`),
-  create: (data) => api.post('/items', data),
-  update: (id, data) => api.put(`/items/${id}`, data),
+  create: (data) => api.post('/items', data, {
+    headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : {},
+  }),
+  update: (id, data) => api.put(`/items/${id}`, data, {
+    headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : {},
+  }),
   delete: (id) => api.delete(`/items/${id}`),
   getStats: () => api.get('/items/stats'),
   getMaintenance: () => api.get('/items/maintenance'),
@@ -157,8 +161,12 @@ export const attendancesAPI = {
 export const eventsAPI = {
   getAll: (params) => api.get('/events', { params }),
   getById: (id) => api.get(`/events/${id}`),
-  create: (data) => api.post('/events', data),
-  update: (id, data) => api.put(`/events/${id}`, data),
+  create: (data) => api.post('/events', data, {
+    headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : {},
+  }),
+  update: (id, data) => api.put(`/events/${id}`, data, {
+    headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : {},
+  }),
   delete: (id) => api.delete(`/events/${id}`),
   getUpcoming: (limit = 10) => api.get(`/events/upcoming?limit=${limit}`),
 };
@@ -238,8 +246,12 @@ export const evaluationsAPI = {
 export const activitiesAPI = {
   getAll: (params) => api.get('/activities', { params }),
   getById: (id) => api.get(`/activities/${id}`),
-  create: (data) => api.post('/activities', data),
-  update: (id, data) => api.put(`/activities/${id}`, data),
+  create: (data) => api.post('/activities', data, {
+    headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : {},
+  }),
+  update: (id, data) => api.put(`/activities/${id}`, data, {
+    headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : {},
+  }),
   delete: (id) => api.delete(`/activities/${id}`),
   getRecent: (limit = 10) => api.get(`/activities/recent?limit=${limit}`),
 };

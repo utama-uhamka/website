@@ -11,6 +11,7 @@ import {
   taskLogsAPI,
   notificationsAPI,
   billingsAPI,
+  accountsAPI,
 } from '../services/api';
 
 // Items
@@ -492,6 +493,43 @@ export const fetchBillingStats = createAsyncThunk('data/fetchBillingStats', asyn
   }
 });
 
+// Accounts (PLN/PDAM)
+export const fetchAccounts = createAsyncThunk('data/fetchAccounts', async (params, { rejectWithValue }) => {
+  try {
+    const response = await accountsAPI.getAll(params);
+    return response.data;
+  } catch (error) {
+    return rejectWithValue(error.response?.data?.message || 'Gagal mengambil data account');
+  }
+});
+
+export const createAccount = createAsyncThunk('data/createAccount', async (data, { rejectWithValue }) => {
+  try {
+    const response = await accountsAPI.create(data);
+    return response.data;
+  } catch (error) {
+    return rejectWithValue(error.response?.data?.message || 'Gagal membuat account');
+  }
+});
+
+export const updateAccount = createAsyncThunk('data/updateAccount', async ({ id, data }, { rejectWithValue }) => {
+  try {
+    const response = await accountsAPI.update(id, data);
+    return response.data;
+  } catch (error) {
+    return rejectWithValue(error.response?.data?.message || 'Gagal mengupdate account');
+  }
+});
+
+export const deleteAccount = createAsyncThunk('data/deleteAccount', async (id, { rejectWithValue }) => {
+  try {
+    const response = await accountsAPI.delete(id);
+    return { id, ...response.data };
+  } catch (error) {
+    return rejectWithValue(error.response?.data?.message || 'Gagal menghapus account');
+  }
+});
+
 const initialState = {
   items: { data: [], pagination: { total: 0, page: 1, limit: 10, totalPages: 0 }, stats: null },
   attendances: { data: [], pagination: { total: 0, page: 1, limit: 10, totalPages: 0 }, todayStats: null },
@@ -504,6 +542,7 @@ const initialState = {
   taskLogs: { data: [], pagination: { total: 0, page: 1, limit: 10, totalPages: 0 } },
   notifications: { data: [], pagination: { total: 0, page: 1, limit: 10, totalPages: 0 } },
   billings: { data: [], pagination: { total: 0, page: 1, limit: 10, totalPages: 0 }, stats: null },
+  accounts: { data: [], pagination: { total: 0, page: 1, limit: 10, totalPages: 0 } },
   loading: false,
   error: null,
   success: null,
@@ -676,7 +715,21 @@ const dataSlice = createSlice({
         state.success = action.payload.message;
         state.billings.data = state.billings.data.filter(b => b.billing_id !== action.payload.id);
       })
-      .addCase(fetchBillingStats.fulfilled, (state, action) => { state.billings.stats = action.payload; });
+      .addCase(fetchBillingStats.fulfilled, (state, action) => { state.billings.stats = action.payload; })
+      // Accounts
+      .addCase(fetchAccounts.pending, (state) => { state.loading = true; state.error = null; })
+      .addCase(fetchAccounts.fulfilled, (state, action) => {
+        state.loading = false;
+        state.accounts.data = action.payload.data;
+        state.accounts.pagination = action.payload.pagination;
+      })
+      .addCase(fetchAccounts.rejected, (state, action) => { state.loading = false; state.error = action.payload; })
+      .addCase(createAccount.fulfilled, (state, action) => { state.success = action.payload.message; })
+      .addCase(updateAccount.fulfilled, (state, action) => { state.success = action.payload.message; })
+      .addCase(deleteAccount.fulfilled, (state, action) => {
+        state.success = action.payload.message;
+        state.accounts.data = state.accounts.data.filter(a => a.account_id !== action.payload.id);
+      });
   },
 });
 

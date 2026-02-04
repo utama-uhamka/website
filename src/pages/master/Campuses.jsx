@@ -21,6 +21,16 @@ import {
   clearCampusesSuccess,
 } from '../../store/campusesSlice';
 import { convertToWebP, validateImageFile } from '../../utils/imageUtils';
+import logoDefault from '/logo.png';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
+// Helper function to get image URL
+const getImageUrl = (photo) => {
+  if (!photo) return logoDefault;
+  if (photo.startsWith('http://') || photo.startsWith('https://')) return photo;
+  return `${API_BASE_URL.replace('/api/dashboard', '')}/uploads/campuses/${photo}`;
+};
 
 const Campuses = () => {
   const navigate = useNavigate();
@@ -90,6 +100,22 @@ const Campuses = () => {
   }, [searchValue, filterValues]);
 
   const columns = [
+    {
+      key: 'photo_1',
+      label: 'Foto',
+      width: '80px',
+      render: (value) => (
+        <img
+          src={getImageUrl(value)}
+          alt="Foto Unit"
+          className="w-12 h-12 rounded-lg object-cover"
+          onError={(e) => {
+            e.target.onerror = null;
+            e.target.src = logoDefault;
+          }}
+        />
+      ),
+    },
     { key: 'campus_id', label: 'ID', width: '120px' },
     { key: 'campus_name', label: 'Nama Unit' },
     { key: 'alamat', label: 'Alamat' },
@@ -126,9 +152,9 @@ const Campuses = () => {
       alamat: item.alamat || '',
       kata_pengantar: item.kata_pengantar || '',
     });
-    // Set existing images as preview
-    setPhotoPreview(item.photo_1 || '');
-    setCoverPreview(item.cover || '');
+    // Set existing images as preview with full URL
+    setPhotoPreview(item.photo_1 ? getImageUrl(item.photo_1) : '');
+    setCoverPreview(item.cover ? getImageUrl(item.cover) : '');
     setPhotoFile(null);
     setCoverFile(null);
     setIsModalOpen(true);

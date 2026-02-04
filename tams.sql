@@ -1,5 +1,5 @@
 /*
- Navicat Premium Dump SQL
+ Navicat Premium Data Transfer
 
  Source Server         : LOCALHOST
  Source Server Type    : MySQL
@@ -11,7 +11,7 @@
  Target Server Version : 80403 (8.4.3)
  File Encoding         : 65001
 
- Date: 01/01/2026 10:46:46
+ Date: 04/02/2026 06:26:12
 */
 
 SET NAMES utf8mb4;
@@ -103,7 +103,7 @@ CREATE TABLE `billings`  (
   INDEX `campus_id`(`campus_id` ASC) USING BTREE,
   CONSTRAINT `billings_ibfk_1` FOREIGN KEY (`item_id`) REFERENCES `items` (`item_id`) ON DELETE CASCADE ON UPDATE RESTRICT,
   CONSTRAINT `billings_ibfk_2` FOREIGN KEY (`campus_id`) REFERENCES `campuses` (`campus_id`) ON DELETE CASCADE ON UPDATE RESTRICT
-) ENGINE = InnoDB CHARACTER SET = latin1 COLLATE = latin1_swedish_ci ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB CHARACTER SET = latin1 COLLATE = latin1_swedish_ci ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Table structure for buildings
@@ -369,7 +369,7 @@ CREATE TABLE `push_notification_logs`  (
   INDEX `push_notification_logs_target_type`(`target_type` ASC) USING BTREE,
   INDEX `push_notification_logs_status`(`status` ASC) USING BTREE,
   INDEX `push_notification_logs_created_at`(`createdAt` ASC) USING BTREE
-) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Table structure for roles
@@ -399,7 +399,7 @@ CREATE TABLE `rooms`  (
   UNIQUE INDEX `room_id`(`room_id` ASC) USING BTREE,
   INDEX `floor_id`(`floor_id` ASC) USING BTREE,
   CONSTRAINT `rooms_ibfk_1` FOREIGN KEY (`floor_id`) REFERENCES `floors` (`floor_id`) ON DELETE CASCADE ON UPDATE RESTRICT
-) ENGINE = InnoDB CHARACTER SET = latin1 COLLATE = latin1_swedish_ci ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB CHARACTER SET = latin1 COLLATE = latin1_swedish_ci ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Table structure for sequelizemeta
@@ -409,7 +409,7 @@ CREATE TABLE `sequelizemeta`  (
   `name` varchar(255) CHARACTER SET utf8mb3 COLLATE utf8mb3_unicode_ci NOT NULL,
   PRIMARY KEY (`name`) USING BTREE,
   UNIQUE INDEX `name`(`name` ASC) USING BTREE
-) ENGINE = InnoDB CHARACTER SET = utf8mb3 COLLATE = utf8mb3_unicode_ci ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB CHARACTER SET = utf8mb3 COLLATE = utf8mb3_unicode_ci ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Table structure for shifts
@@ -424,7 +424,7 @@ CREATE TABLE `shifts`  (
   `updatedAt` datetime NOT NULL,
   PRIMARY KEY (`shift_id`) USING BTREE,
   UNIQUE INDEX `shift_id`(`shift_id` ASC) USING BTREE
-) ENGINE = InnoDB CHARACTER SET = latin1 COLLATE = latin1_swedish_ci ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB CHARACTER SET = latin1 COLLATE = latin1_swedish_ci ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Table structure for task_logs
