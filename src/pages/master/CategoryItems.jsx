@@ -29,7 +29,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 const getCategoryImageUrl = (photo) => {
   if (!photo) return logoFallback;
   if (photo.startsWith('http://') || photo.startsWith('https://')) return photo;
-  return `${API_BASE_URL.replace('/api/dashboard', '')}/uploads/category_items/${photo}`;
+  return `${API_BASE_URL.replace('/api/dashboard', '')}/uploads/categories/${photo}`;
 };
 
 const CategoryItems = () => {

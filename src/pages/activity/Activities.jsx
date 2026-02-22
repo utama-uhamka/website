@@ -103,8 +103,8 @@ const Activities = () => {
       render: (value, item) => (
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-            {item.user?.photo ? (
-              <img src={item.user.photo} alt={item.user?.full_name} className="w-8 h-8 rounded-full object-cover" />
+            {item.user?.photo_1 ? (
+              <img src={item.user.photo_1} alt={item.user?.full_name} className="w-8 h-8 rounded-full object-cover" />
             ) : (
               <FiUser size={14} className="text-primary" />
             )}
@@ -375,11 +375,11 @@ const Activities = () => {
               </div>
             </div>
 
-            {selectedItem.photo && (
+            {selectedItem.photo_1 && (
               <div>
                 <p className="text-xs text-gray-500 mb-2">Foto Kegiatan</p>
                 <div className="w-full h-48 bg-gray-100 rounded-lg overflow-hidden">
-                  <img src={selectedItem.photo} alt="Kegiatan" className="w-full h-full object-cover" />
+                  <img src={selectedItem.photo_1} alt="Kegiatan" className="w-full h-full object-cover" />
                 </div>
               </div>
             )}

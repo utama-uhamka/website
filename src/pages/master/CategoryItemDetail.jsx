@@ -492,7 +492,7 @@ const CategoryItemDetail = () => {
           <div className="flex-shrink-0">
             {categoryData.photo_1 ? (
               <img
-                src={getImageUrl(categoryData.photo_1, 'category_items')}
+                src={getImageUrl(categoryData.photo_1, 'categories')}
                 alt={categoryData.category_item_name}
                 className="w-24 h-24 rounded-2xl object-cover shadow-lg border-2 border-white"
                 onError={(e) => { e.target.src = logoFallback; }}

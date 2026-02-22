@@ -126,8 +126,8 @@ const Leaves = () => {
       render: (value, item) => (
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-            {item.user?.photo ? (
-              <img src={item.user.photo} alt={item.user?.full_name} className="w-8 h-8 rounded-full object-cover" />
+            {item.user?.photo_1 ? (
+              <img src={item.user.photo_1} alt={item.user?.full_name} className="w-8 h-8 rounded-full object-cover" />
             ) : (
               <FiUser size={14} className="text-primary" />
             )}
@@ -496,8 +496,8 @@ const Leaves = () => {
           <div className="space-y-4">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                {selectedItem.user?.photo ? (
-                  <img src={selectedItem.user.photo} alt={selectedItem.user?.full_name} className="w-12 h-12 rounded-full object-cover" />
+                {selectedItem.user?.photo_1 ? (
+                  <img src={selectedItem.user.photo_1} alt={selectedItem.user?.full_name} className="w-12 h-12 rounded-full object-cover" />
                 ) : (
                   <FiUser size={24} className="text-primary" />
                 )}

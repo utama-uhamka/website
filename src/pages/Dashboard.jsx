@@ -152,7 +152,7 @@ const Dashboard = () => {
   const COLORS = ['#4A22AD', '#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
   const employeeByRole =
     stats?.usersByRole?.map((item, index) => ({
-      name: `Role ${item.role_id}`,
+      name: item.role?.role_name || `Role ${item.role_id}`,
       value: parseInt(item.count),
       color: COLORS[index % COLORS.length],
     })) || [];
