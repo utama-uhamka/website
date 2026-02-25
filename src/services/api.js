@@ -305,6 +305,20 @@ export const billingsAPI = {
   getStats: () => api.get('/billings/stats'),
 };
 
+// Banners API
+export const bannersAPI = {
+  getAll: (params) => api.get('/banners', { params }),
+  getById: (id) => api.get(`/banners/${id}`),
+  create: (data) => api.post('/banners', data, {
+    headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : {},
+  }),
+  update: (id, data) => api.put(`/banners/${id}`, data, {
+    headers: data instanceof FormData ? { 'Content-Type': 'multipart/form-data' } : {},
+  }),
+  delete: (id) => api.delete(`/banners/${id}`),
+  toggleActive: (id) => api.put(`/banners/${id}/toggle`),
+};
+
 // Reports API
 export const reportsAPI = {
   getCampusReportData: (campusId, params) => api.get(`/reports/campus/${campusId}/data`, { params }),

@@ -7,7 +7,8 @@ import {
   rolesAPI,
   categoryItemsAPI,
   eventCategoriesAPI,
-  accountsAPI
+  accountsAPI,
+  bannersAPI
 } from '../services/api';
 
 // Buildings
@@ -342,6 +343,52 @@ export const deleteAccount = createAsyncThunk('master/deleteAccount', async (id,
   }
 });
 
+// Banners
+export const fetchBanners = createAsyncThunk('master/fetchBanners', async (params, { rejectWithValue }) => {
+  try {
+    const response = await bannersAPI.getAll(params);
+    return response.data;
+  } catch (error) {
+    return rejectWithValue(error.response?.data?.message || 'Gagal mengambil data banner');
+  }
+});
+
+export const createBanner = createAsyncThunk('master/createBanner', async (data, { rejectWithValue }) => {
+  try {
+    const response = await bannersAPI.create(data);
+    return response.data;
+  } catch (error) {
+    return rejectWithValue(error.response?.data?.message || 'Gagal membuat banner');
+  }
+});
+
+export const updateBanner = createAsyncThunk('master/updateBanner', async ({ id, data }, { rejectWithValue }) => {
+  try {
+    const response = await bannersAPI.update(id, data);
+    return response.data;
+  } catch (error) {
+    return rejectWithValue(error.response?.data?.message || 'Gagal mengupdate banner');
+  }
+});
+
+export const deleteBanner = createAsyncThunk('master/deleteBanner', async (id, { rejectWithValue }) => {
+  try {
+    const response = await bannersAPI.delete(id);
+    return { id, ...response.data };
+  } catch (error) {
+    return rejectWithValue(error.response?.data?.message || 'Gagal menghapus banner');
+  }
+});
+
+export const toggleBannerActive = createAsyncThunk('master/toggleBannerActive', async (id, { rejectWithValue }) => {
+  try {
+    const response = await bannersAPI.toggleActive(id);
+    return response.data;
+  } catch (error) {
+    return rejectWithValue(error.response?.data?.message || 'Gagal mengubah status banner');
+  }
+});
+
 const initialState = {
   buildings: { data: [], pagination: { total: 0, page: 1, limit: 10, totalPages: 0 } },
   floors: { data: [], pagination: { total: 0, page: 1, limit: 10, totalPages: 0 } },
@@ -351,6 +398,7 @@ const initialState = {
   categoryItems: { data: [], pagination: { total: 0, page: 1, limit: 10, totalPages: 0 } },
   eventCategories: { data: [], pagination: { total: 0, page: 1, limit: 10, totalPages: 0 } },
   accounts: { data: [], pagination: { total: 0, page: 1, limit: 10, totalPages: 0 } },
+  banners: { data: [], pagination: { total: 0, page: 1, limit: 10, totalPages: 0 } },
   loading: false,
   error: null,
   success: null,
@@ -480,7 +528,22 @@ const masterSlice = createSlice({
       .addCase(deleteAccount.fulfilled, (state, action) => {
         state.success = action.payload.message;
         state.accounts.data = state.accounts.data.filter(a => a.account_id !== action.payload.id);
-      });
+      })
+      // Banners
+      .addCase(fetchBanners.pending, (state) => { state.loading = true; state.error = null; })
+      .addCase(fetchBanners.fulfilled, (state, action) => {
+        state.loading = false;
+        state.banners.data = action.payload.data;
+        state.banners.pagination = action.payload.pagination;
+      })
+      .addCase(fetchBanners.rejected, (state, action) => { state.loading = false; state.error = action.payload; })
+      .addCase(createBanner.fulfilled, (state, action) => { state.success = action.payload.message; })
+      .addCase(updateBanner.fulfilled, (state, action) => { state.success = action.payload.message; })
+      .addCase(deleteBanner.fulfilled, (state, action) => {
+        state.success = action.payload.message;
+        state.banners.data = state.banners.data.filter(b => b.banner_id !== action.payload.id);
+      })
+      .addCase(toggleBannerActive.fulfilled, (state, action) => { state.success = action.payload.message; });
   },
 });
 

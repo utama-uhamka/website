@@ -53,6 +53,7 @@ import Profile from './pages/Profile';
 import Settings from './pages/Settings';
 import PushNotification from './pages/PushNotification';
 import Billing from './pages/Billing';
+import Banners from './pages/Banners';
 
 // Components
 import ProtectedRoute from './components/ProtectedRoute';
@@ -146,6 +147,9 @@ function App() {
 
           {/* Evaluation */}
           <Route path="/evaluations" element={<ProtectedRoute><Evaluations /></ProtectedRoute>} />
+
+          {/* Banner */}
+          <Route path="/banners" element={<ProtectedRoute><Banners /></ProtectedRoute>} />
 
           {/* Push Notification */}
           <Route path="/push-notification" element={<ProtectedRoute><PushNotification /></ProtectedRoute>} />
