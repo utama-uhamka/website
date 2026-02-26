@@ -38,6 +38,7 @@ const Banners = () => {
     title: '',
     link_url: '',
     sort_order: 0,
+    is_active: 1,
   });
 
   const itemsPerPage = 10;
@@ -72,6 +73,16 @@ const Banners = () => {
   useEffect(() => {
     setCurrentPage(1);
   }, [searchValue]);
+
+  // Generate sort order options based on existing data
+  const sortOrderOptions = (() => {
+    const totalBanners = banners.data?.length || 0;
+    const count = selectedItem ? totalBanners : totalBanners + 1;
+    return Array.from({ length: Math.max(count, 1) }, (_, i) => ({
+      value: (i + 1).toString(),
+      label: `Urutan ${i + 1}`,
+    }));
+  })();
 
   const columns = [
     {
@@ -113,9 +124,12 @@ const Banners = () => {
       render: (value, row) => (
         <button
           onClick={(e) => { e.stopPropagation(); handleToggleActive(row); }}
-          className="cursor-pointer"
+          className="cursor-pointer group relative"
+          title={value === 1 ? 'Klik untuk nonaktifkan' : 'Klik untuk aktifkan'}
         >
-          <StatusBadge status={value === 1 ? 'active' : 'inactive'} label={value === 1 ? 'Aktif' : 'Nonaktif'} />
+          <div className="transition-transform group-hover:scale-110">
+            <StatusBadge status={value === 1 ? 'active' : 'inactive'} label={value === 1 ? 'Aktif' : 'Nonaktif'} />
+          </div>
         </button>
       ),
     },
@@ -131,7 +145,7 @@ const Banners = () => {
 
   const handleAdd = () => {
     setSelectedItem(null);
-    setFormData({ title: '', link_url: '', sort_order: 0 });
+    setFormData({ title: '', link_url: '', sort_order: (banners.data?.length || 0) + 1, is_active: 1 });
     setImagePreview(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
     setIsModalOpen(true);
@@ -143,6 +157,7 @@ const Banners = () => {
       title: item.title || '',
       link_url: item.link_url || '',
       sort_order: item.sort_order || 0,
+      is_active: item.is_active ?? 1,
     });
     setImagePreview(item.image || null);
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -181,6 +196,7 @@ const Banners = () => {
       fd.append('title', formData.title);
       fd.append('link_url', formData.link_url || '');
       fd.append('sort_order', formData.sort_order);
+      fd.append('is_active', formData.is_active);
       if (file) fd.append('image', file);
 
       if (selectedItem) {
@@ -289,14 +305,28 @@ const Banners = () => {
           placeholder="https://contoh.com"
         />
 
-        <FormInput
-          label="Urutan Tampil"
-          name="sort_order"
-          type="number"
-          value={formData.sort_order}
-          onChange={handleInputChange}
-          placeholder="0"
-        />
+        <div className="grid grid-cols-2 gap-4">
+          <FormInput
+            label="Urutan Tampil"
+            name="sort_order"
+            type="select"
+            value={formData.sort_order?.toString()}
+            onChange={(e) => setFormData((prev) => ({ ...prev, sort_order: parseInt(e.target.value) }))}
+            options={sortOrderOptions}
+            placeholder="Pilih Urutan"
+          />
+          <FormInput
+            label="Status"
+            name="is_active"
+            type="select"
+            value={formData.is_active?.toString()}
+            onChange={(e) => setFormData((prev) => ({ ...prev, is_active: parseInt(e.target.value) }))}
+            options={[
+              { value: '1', label: 'Aktif' },
+              { value: '0', label: 'Nonaktif' },
+            ]}
+          />
+        </div>
       </Modal>
 
       {/* Delete Confirmation */}
