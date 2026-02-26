@@ -23,19 +23,102 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor - handle errors
+// Refresh token state
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  failedQueue = [];
+};
+
+const forceLogout = () => {
+  localStorage.removeItem('token');
+  localStorage.removeItem('refreshToken');
+  localStorage.removeItem('user');
+  window.location.href = '/login';
+};
+
+// Response interceptor - handle token refresh
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      // Don't redirect if already on login page (prevents reload on failed login)
-      const isLoginPage = window.location.pathname === '/login';
-      if (!isLoginPage) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        window.location.href = '/login';
+  async (error) => {
+    const originalRequest = error.config;
+
+    // Only attempt refresh on 401 with TOKEN_EXPIRED code
+    if (
+      error.response?.status === 401 &&
+      error.response?.data?.code === 'TOKEN_EXPIRED' &&
+      !originalRequest._retry &&
+      !originalRequest.url?.includes('/auth/refresh')
+    ) {
+      // If already refreshing, queue this request
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then((token) => {
+            originalRequest.headers.Authorization = `Bearer ${token}`;
+            return api(originalRequest);
+          })
+          .catch((err) => Promise.reject(err));
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      try {
+        const refreshToken = localStorage.getItem('refreshToken');
+        if (!refreshToken) {
+          throw new Error('No refresh token');
+        }
+
+        // Use raw axios to avoid interceptor loop
+        const response = await axios.post(
+          `${API_BASE_URL}/auth/refresh`,
+          { refresh_token: refreshToken }
+        );
+
+        if (response.data.success) {
+          const { token, refreshToken: newRefreshToken } = response.data.data;
+
+          localStorage.setItem('token', token);
+          localStorage.setItem('refreshToken', newRefreshToken);
+
+          originalRequest.headers.Authorization = `Bearer ${token}`;
+          processQueue(null, token);
+
+          return api(originalRequest);
+        } else {
+          throw new Error('Refresh failed');
+        }
+      } catch (refreshError) {
+        processQueue(refreshError, null);
+        forceLogout();
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
       }
     }
+
+    // For other 401 errors (TOKEN_INVALID, TOKEN_MISSING) - not on login page
+    if (
+      error.response?.status === 401 &&
+      error.response?.data?.code !== 'TOKEN_EXPIRED' &&
+      !originalRequest.url?.includes('/auth/login')
+    ) {
+      const isLoginPage = window.location.pathname === '/login';
+      if (!isLoginPage) {
+        forceLogout();
+      }
+    }
+
     return Promise.reject(error);
   }
 );
@@ -43,6 +126,8 @@ api.interceptors.response.use(
 // Auth API
 export const authAPI = {
   login: (email, password) => api.post('/auth/login', { email, password }),
+  refresh: (refresh_token) => api.post('/auth/refresh', { refresh_token }),
+  logout: (refresh_token) => api.post('/auth/logout', { refresh_token }),
   getProfile: () => api.get('/auth/profile'),
   updateProfile: (data) => api.put('/auth/profile', data),
   changePassword: (data) => api.post('/auth/change-password', data),
@@ -331,6 +416,14 @@ export const reportsAPI = {
     params,
     responseType: 'blob',
   }),
+};
+
+// Maps API
+export const mapsAPI = {
+  getBuildingGeofences: (params) => api.get('/maps/buildings', { params }),
+  getAttendancePoints: (params) => api.get('/maps/attendance-points', { params }),
+  getHeatmapData: (params) => api.get('/maps/heatmap', { params }),
+  getCampusOptions: () => api.get('/maps/campus-options'),
 };
 
 export default api;

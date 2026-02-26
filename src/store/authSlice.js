@@ -7,8 +7,9 @@ export const loginAsync = createAsyncThunk(
   async ({ email, password }, { rejectWithValue }) => {
     try {
       const response = await authAPI.login(email, password);
-      const { token, user } = response.data.data;
+      const { token, refreshToken, user } = response.data.data;
       localStorage.setItem('token', token);
+      localStorage.setItem('refreshToken', refreshToken);
       localStorage.setItem('user', JSON.stringify(user));
       return { token, user };
     } catch (error) {
@@ -71,7 +72,14 @@ const authSlice = createSlice({
       state.isAuthenticated = false;
       state.error = null;
       localStorage.removeItem('token');
+      localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
+    },
+    forceLogout: (state) => {
+      state.user = null;
+      state.token = null;
+      state.isAuthenticated = false;
+      state.error = null;
     },
     clearError: (state) => {
       state.error = null;
@@ -144,5 +152,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { logout, clearError, checkAuth } = authSlice.actions;
+export const { logout, forceLogout, clearError, checkAuth } = authSlice.actions;
 export default authSlice.reducer;

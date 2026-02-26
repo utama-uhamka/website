@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react';
 import {
   FiHome, FiLogOut, FiDatabase, FiChevronDown, FiChevronRight, FiMap,
   FiTag, FiShield, FiClock, FiFolder, FiAlertCircle, FiPackage,
-  FiUserCheck, FiCalendar, FiUsers, FiBell, FiImage
+  FiUserCheck, FiCalendar, FiUsers, FiBell, FiImage, FiGlobe
 } from 'react-icons/fi';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { logout } from '../store/authSlice';
+import { authAPI } from '../services/api';
 import logo from '../assets/logo.png';
 
 const Sidebar = () => {
@@ -48,6 +49,7 @@ const Sidebar = () => {
         { icon: FiCalendar, label: 'Cuti', path: '/leaves' },
       ],
     },
+    { icon: FiGlobe, label: 'Live Maps', path: '/maps' },
     { icon: FiImage, label: 'Banner', path: '/banners' },
     { icon: FiBell, label: 'Push Notification', path: '/push-notification' },
   ];
@@ -109,7 +111,15 @@ const Sidebar = () => {
   const isActive = (path) => isPathActive(path);
   const isParentActive = (children) => children?.some(child => isPathActive(child.path));
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      const refreshToken = localStorage.getItem('refreshToken');
+      if (refreshToken) {
+        await authAPI.logout(refreshToken);
+      }
+    } catch (e) {
+      // Ignore - still logout locally
+    }
     dispatch(logout());
     navigate('/login');
   };

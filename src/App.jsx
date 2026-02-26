@@ -54,6 +54,7 @@ import Settings from './pages/Settings';
 import PushNotification from './pages/PushNotification';
 import Billing from './pages/Billing';
 import Banners from './pages/Banners';
+import Maps from './pages/Maps';
 
 // Components
 import ProtectedRoute from './components/ProtectedRoute';
@@ -153,6 +154,9 @@ function App() {
 
           {/* Push Notification */}
           <Route path="/push-notification" element={<ProtectedRoute><PushNotification /></ProtectedRoute>} />
+
+          {/* Maps */}
+          <Route path="/maps" element={<ProtectedRoute><Maps /></ProtectedRoute>} />
 
           {/* Billing */}
           <Route path="/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />
