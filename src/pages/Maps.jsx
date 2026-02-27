@@ -16,19 +16,38 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
 });
 
+// Custom building marker icon (purple pin)
+const buildingIcon = new L.DivIcon({
+  html: `<div style="position:relative;width:30px;height:40px;">
+    <svg viewBox="0 0 30 40" width="30" height="40">
+      <path d="M15 0C6.7 0 0 6.7 0 15c0 11.25 15 25 15 25s15-13.75 15-25C30 6.7 23.3 0 15 0z" fill="#4A22AD"/>
+      <circle cx="15" cy="14" r="7" fill="white"/>
+      <path d="M11 11h8v7h-8z M13 11v-2h4v2 M12 14h6 M12 16h6" stroke="#4A22AD" stroke-width="1.2" fill="none"/>
+    </svg>
+  </div>`,
+  className: 'custom-div-icon',
+  iconSize: [30, 40],
+  iconAnchor: [15, 40],
+  popupAnchor: [0, -40],
+});
+
 // Custom attendance marker icons
 const clockInIcon = new L.DivIcon({
-  html: '<div style="background:#10b981;width:12px;height:12px;border-radius:50%;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>',
+  html: `<div style="display:flex;align-items:center;gap:2px;">
+    <div style="background:#059669;width:16px;height:16px;border-radius:50%;border:2.5px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.35);"></div>
+  </div>`,
   className: 'custom-div-icon',
-  iconSize: [12, 12],
-  iconAnchor: [6, 6],
+  iconSize: [16, 16],
+  iconAnchor: [8, 8],
 });
 
 const clockOutIcon = new L.DivIcon({
-  html: '<div style="background:#ef4444;width:12px;height:12px;border-radius:50%;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>',
+  html: `<div style="display:flex;align-items:center;gap:2px;">
+    <div style="background:#dc2626;width:16px;height:16px;border-radius:50%;border:2.5px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.35);"></div>
+  </div>`,
   className: 'custom-div-icon',
-  iconSize: [12, 12],
-  iconAnchor: [6, 6],
+  iconSize: [16, 16],
+  iconAnchor: [8, 8],
 });
 
 // ── Sub-components ────────────────────────────────
@@ -453,29 +472,42 @@ const Maps = () => {
             <HeatmapLayer points={heatmapData} visible={showHeatmap} />
             <FlyToLocation target={flyTarget} />
 
-            {/* Building geofence circles */}
+            {/* Building geofence circles + markers */}
             {showBuildings &&
-              buildings.map((b) => (
-                <Circle
-                  key={b.building_id}
-                  center={[parseFloat(b.latitude), parseFloat(b.longitude)]}
-                  radius={b.radius || 100}
-                  pathOptions={{
-                    color: '#4A22AD',
-                    fillColor: '#4A22AD',
-                    fillOpacity: 0.15,
-                    weight: 2,
-                  }}
-                >
-                  <Popup>
-                    <div className="text-sm">
-                      <p className="font-semibold text-gray-800">{b.building_name}</p>
-                      {b.campus && <p className="text-gray-500 text-xs">{b.campus.campus_name}</p>}
-                      <p className="text-gray-400 text-xs mt-1">Radius: {b.radius || 100}m</p>
-                    </div>
-                  </Popup>
-                </Circle>
-              ))}
+              buildings.map((b) => {
+                const pos = [parseFloat(b.latitude), parseFloat(b.longitude)];
+                return (
+                  <span key={b.building_id}>
+                    <Circle
+                      center={pos}
+                      radius={b.radius || 100}
+                      pathOptions={{
+                        color: '#4A22AD',
+                        fillColor: '#4A22AD',
+                        fillOpacity: 0.12,
+                        weight: 2,
+                        dashArray: '6 4',
+                      }}
+                    />
+                    <Marker position={pos} icon={buildingIcon}>
+                      <Popup>
+                        <div className="text-sm min-w-[160px]">
+                          <p className="font-bold text-gray-800 text-base">{b.building_name}</p>
+                          {b.campus && <p className="text-gray-500 text-xs mt-0.5">{b.campus.campus_name}</p>}
+                          <div className="flex items-center gap-1 mt-2 text-xs text-gray-400">
+                            <FiTarget size={11} />
+                            <span>Radius: {b.radius || 100}m</span>
+                          </div>
+                          <div className="flex items-center gap-1 text-xs text-gray-400">
+                            <FiMapPin size={11} />
+                            <span>{parseFloat(b.latitude).toFixed(6)}, {parseFloat(b.longitude).toFixed(6)}</span>
+                          </div>
+                        </div>
+                      </Popup>
+                    </Marker>
+                  </span>
+                );
+              })}
 
             {/* Attendance point markers */}
             {showPoints &&
@@ -501,20 +533,27 @@ const Maps = () => {
           </MapContainer>
 
           {/* Legend */}
-          <div className="absolute bottom-4 left-4 z-[1000] bg-white/95 backdrop-blur rounded-lg shadow-md border border-gray-200 px-3 py-2">
-            <p className="text-xs font-medium text-gray-600 mb-1.5">Keterangan</p>
-            <div className="space-y-1">
+          <div className="absolute bottom-4 left-4 z-[1000] bg-white/95 backdrop-blur rounded-lg shadow-md border border-gray-200 px-3 py-2.5">
+            <p className="text-xs font-medium text-gray-600 mb-2">Keterangan</p>
+            <div className="space-y-1.5">
               <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-primary border-2 border-primary/30" />
-                <span className="text-xs text-gray-600">Area Gedung (Geofence)</span>
+                <svg viewBox="0 0 14 18" width="14" height="18">
+                  <path d="M7 0C3.1 0 0 3.1 0 7c0 5.25 7 11 7 11s7-5.75 7-11C14 3.1 10.9 0 7 0z" fill="#4A22AD"/>
+                  <circle cx="7" cy="6.5" r="3" fill="white"/>
+                </svg>
+                <span className="text-xs text-gray-600">Gedung</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-emerald-500 border-2 border-white shadow" />
-                <span className="text-xs text-gray-600">Clock In</span>
+                <span className="w-3.5 h-3.5 rounded-full border-2 border-dashed border-primary/50 bg-primary/10" />
+                <span className="text-xs text-gray-600">Area Absensi Gedung</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-red-500 border-2 border-white shadow" />
-                <span className="text-xs text-gray-600">Clock Out</span>
+                <span className="w-3.5 h-3.5 rounded-full bg-green-600 border-2 border-white shadow" />
+                <span className="text-xs text-gray-600 font-medium text-green-700">Clock In</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-3.5 h-3.5 rounded-full bg-red-600 border-2 border-white shadow" />
+                <span className="text-xs text-gray-600 font-medium text-red-700">Clock Out</span>
               </div>
             </div>
           </div>
