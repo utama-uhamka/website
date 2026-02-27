@@ -6,6 +6,7 @@ import { Toaster } from 'react-hot-toast';
 
 // Pages
 import Login from './pages/Login';
+import OTPVerification from './pages/OTPVerification';
 import Dashboard from './pages/Dashboard';
 import Issue from './pages/Issue';
 import Event from './pages/Event';
@@ -96,6 +97,7 @@ function App() {
       <Router>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/verify-otp" element={<OTPVerification />} />
 
           {/* Dashboard */}
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />

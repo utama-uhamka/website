@@ -126,6 +126,7 @@ api.interceptors.response.use(
 // Auth API
 export const authAPI = {
   login: (email, password) => api.post('/auth/login', { email, password }),
+  verifyLoginOtp: (email, otp) => api.post('/auth/verify-login-otp', { email, otp }),
   refresh: (refresh_token) => api.post('/auth/refresh', { refresh_token }),
   logout: (refresh_token) => api.post('/auth/logout', { refresh_token }),
   getProfile: () => api.get('/auth/profile'),

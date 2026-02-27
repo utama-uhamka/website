@@ -11,13 +11,19 @@ const Login = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
-  const { loading, error, isAuthenticated } = useSelector((state) => state.auth);
+  const { loading, error, isAuthenticated, otpRequired } = useSelector((state) => state.auth);
 
   useEffect(() => {
     if (isAuthenticated) {
       navigate('/dashboard');
     }
   }, [isAuthenticated, navigate]);
+
+  useEffect(() => {
+    if (otpRequired) {
+      navigate('/verify-otp');
+    }
+  }, [otpRequired, navigate]);
 
   useEffect(() => {
     return () => {

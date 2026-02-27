@@ -7,6 +7,12 @@ export const loginAsync = createAsyncThunk(
   async ({ email, password }, { rejectWithValue }) => {
     try {
       const response = await authAPI.login(email, password);
+
+      // Check if OTP is required
+      if (response.data.requireOtp) {
+        return { requireOtp: true, email: response.data.data.email, password };
+      }
+
       const { token, refreshToken, user } = response.data.data;
       localStorage.setItem('token', token);
       localStorage.setItem('refreshToken', refreshToken);
@@ -14,6 +20,34 @@ export const loginAsync = createAsyncThunk(
       return { token, user };
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Login gagal');
+    }
+  }
+);
+
+export const verifyOtpAsync = createAsyncThunk(
+  'auth/verifyOtp',
+  async ({ email, otp }, { rejectWithValue }) => {
+    try {
+      const response = await authAPI.verifyLoginOtp(email, otp);
+      const { token, refreshToken, user } = response.data.data;
+      localStorage.setItem('token', token);
+      localStorage.setItem('refreshToken', refreshToken);
+      localStorage.setItem('user', JSON.stringify(user));
+      return { token, user };
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Verifikasi OTP gagal');
+    }
+  }
+);
+
+export const resendOtpAsync = createAsyncThunk(
+  'auth/resendOtp',
+  async ({ email, password }, { rejectWithValue }) => {
+    try {
+      await authAPI.login(email, password);
+      return { email };
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Gagal mengirim ulang OTP');
     }
   }
 );
@@ -60,6 +94,9 @@ const initialState = {
   isAuthenticated: !!localStorage.getItem('token'),
   loading: false,
   error: null,
+  otpRequired: false,
+  otpEmail: null,
+  otpPassword: null,
 };
 
 const authSlice = createSlice({
@@ -71,6 +108,9 @@ const authSlice = createSlice({
       state.token = null;
       state.isAuthenticated = false;
       state.error = null;
+      state.otpRequired = false;
+      state.otpEmail = null;
+      state.otpPassword = null;
       localStorage.removeItem('token');
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
@@ -83,6 +123,11 @@ const authSlice = createSlice({
     },
     clearError: (state) => {
       state.error = null;
+    },
+    clearOtpState: (state) => {
+      state.otpRequired = false;
+      state.otpEmail = null;
+      state.otpPassword = null;
     },
     checkAuth: (state) => {
       const token = localStorage.getItem('token');
@@ -103,12 +148,46 @@ const authSlice = createSlice({
       })
       .addCase(loginAsync.fulfilled, (state, action) => {
         state.loading = false;
-        state.user = action.payload.user;
-        state.token = action.payload.token;
-        state.isAuthenticated = true;
+        if (action.payload.requireOtp) {
+          state.otpRequired = true;
+          state.otpEmail = action.payload.email;
+          state.otpPassword = action.payload.password;
+        } else {
+          state.user = action.payload.user;
+          state.token = action.payload.token;
+          state.isAuthenticated = true;
+        }
       })
       .addCase(loginAsync.rejected, (state, action) => {
         state.loading = false;
+        state.error = action.payload;
+      })
+      // Verify OTP
+      .addCase(verifyOtpAsync.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(verifyOtpAsync.fulfilled, (state, action) => {
+        state.loading = false;
+        state.user = action.payload.user;
+        state.token = action.payload.token;
+        state.isAuthenticated = true;
+        state.otpRequired = false;
+        state.otpEmail = null;
+        state.otpPassword = null;
+      })
+      .addCase(verifyOtpAsync.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      // Resend OTP
+      .addCase(resendOtpAsync.pending, (state) => {
+        state.error = null;
+      })
+      .addCase(resendOtpAsync.fulfilled, () => {
+        // OTP resent successfully
+      })
+      .addCase(resendOtpAsync.rejected, (state, action) => {
         state.error = action.payload;
       })
       // Get Profile
@@ -152,5 +231,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { logout, forceLogout, clearError, checkAuth } = authSlice.actions;
+export const { logout, forceLogout, clearError, clearOtpState, checkAuth } = authSlice.actions;
 export default authSlice.reducer;
