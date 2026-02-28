@@ -125,10 +125,11 @@ const FloorDetail = () => {
   const itemPhoto2InputRef = useRef(null);
 
   const itemConditions = [
-    { value: 'Baik', label: 'Baik' },
+    { value: 'Rusak', label: 'Rusak' },
     { value: 'Menunggu Diperbaiki', label: 'Menunggu Diperbaiki' },
     { value: 'Diperbaiki', label: 'Diperbaiki' },
-    { value: 'Rusak', label: 'Rusak' },
+    { value: 'Maintenance', label: 'Maintenance' },
+    { value: 'Baik', label: 'Baik' },
   ];
 
   const maintenanceOptions = [
@@ -295,10 +296,11 @@ const FloorDetail = () => {
       width: '140px',
       render: (v) => (
         <span className={`inline-flex items-center whitespace-nowrap px-2 py-1 rounded-full text-xs font-medium ${
-          v === 'Baik' ? 'bg-green-100 text-green-700' :
-          v === 'Diperbaiki' ? 'bg-blue-100 text-blue-700' :
-          v === 'Menunggu Diperbaiki' ? 'bg-yellow-100 text-yellow-700' :
           v === 'Rusak' ? 'bg-red-100 text-red-700' :
+          v === 'Menunggu Diperbaiki' ? 'bg-yellow-100 text-yellow-700' :
+          v === 'Diperbaiki' ? 'bg-green-100 text-green-700' :
+          v === 'Maintenance' ? 'bg-blue-100 text-blue-700' :
+          v === 'Baik' ? 'bg-emerald-100 text-emerald-700' :
           'bg-gray-100 text-gray-700'
         }`}>
           {v || '-'}

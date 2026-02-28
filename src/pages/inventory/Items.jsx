@@ -51,10 +51,11 @@ const Items = () => {
   const itemsPerPage = 10;
 
   const conditions = [
-    { value: 'Baik', label: 'Baik' },
-    { value: 'Cukup', label: 'Cukup' },
-    { value: 'Kurang', label: 'Kurang' },
     { value: 'Rusak', label: 'Rusak' },
+    { value: 'Menunggu Diperbaiki', label: 'Menunggu Diperbaiki' },
+    { value: 'Diperbaiki', label: 'Diperbaiki' },
+    { value: 'Maintenance', label: 'Maintenance' },
+    { value: 'Baik', label: 'Baik' },
   ];
 
   // Load items
@@ -143,10 +144,11 @@ const Items = () => {
       width: '100px',
       render: (value) => {
         const conditionColors = {
-          Baik: 'bg-green-100 text-green-700',
-          Cukup: 'bg-yellow-100 text-yellow-700',
-          Kurang: 'bg-orange-100 text-orange-700',
           Rusak: 'bg-red-100 text-red-700',
+          'Menunggu Diperbaiki': 'bg-yellow-100 text-yellow-700',
+          Diperbaiki: 'bg-green-100 text-green-700',
+          Maintenance: 'bg-blue-100 text-blue-700',
+          Baik: 'bg-emerald-100 text-emerald-700',
         };
         return (
           <span className={`px-2 py-1 text-xs font-medium rounded-full ${conditionColors[value] || 'bg-gray-100 text-gray-700'}`}>

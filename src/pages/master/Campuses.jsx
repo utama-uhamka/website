@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'react-hot-toast';
+import ReactQuill from 'react-quill-new';
+import 'react-quill-new/dist/quill.snow.css';
 import MainLayout from '../../layouts/MainLayout';
 import {
   DataTable,
@@ -459,16 +461,27 @@ const Campuses = () => {
           />
         </div>
 
-        <FormInput
-          label="Kata Pengantar"
-          name="kata_pengantar"
-          type="textarea"
-          value={formData.kata_pengantar}
-          onChange={handleInputChange}
-          placeholder="Masukkan kata pengantar/deskripsi unit"
-          rows={4}
-          required
-        />
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Kata Pengantar <span className="text-red-500">*</span>
+          </label>
+          <ReactQuill
+            theme="snow"
+            value={formData.kata_pengantar}
+            onChange={(value) => setFormData((prev) => ({ ...prev, kata_pengantar: value }))}
+            placeholder="Masukkan kata pengantar/deskripsi unit"
+            modules={{
+              toolbar: [
+                [{ header: [1, 2, 3, false] }],
+                ['bold', 'italic', 'underline', 'strike'],
+                [{ list: 'ordered' }, { list: 'bullet' }],
+                [{ align: [] }],
+                ['link'],
+                ['clean'],
+              ],
+            }}
+          />
+        </div>
       </Modal>
 
       {/* Delete Confirmation */}

@@ -29,9 +29,11 @@ const Issue = () => {
   const itemsPerPage = 10;
 
   const conditions = [
-    { value: 'good', label: 'Baik' },
-    { value: 'damaged', label: 'Rusak' },
-    { value: 'maintenance', label: 'Maintenance' },
+    { value: 'Rusak', label: 'Rusak' },
+    { value: 'Menunggu Diperbaiki', label: 'Menunggu Diperbaiki' },
+    { value: 'Diperbaiki', label: 'Diperbaiki' },
+    { value: 'Maintenance', label: 'Maintenance' },
+    { value: 'Baik', label: 'Baik' },
   ];
 
   // Load items with their issues
@@ -102,11 +104,13 @@ const Issue = () => {
 
   // Get issue count per status for an item
   const getIssueCounts = (itemIssues) => {
-    if (!itemIssues || !Array.isArray(itemIssues)) return { pending: 0, inProgress: 0, resolved: 0, total: 0 };
-    const pending = itemIssues.filter(i => parseInt(i.status) === 0).length;
-    const inProgress = itemIssues.filter(i => parseInt(i.status) === 1).length;
-    const resolved = itemIssues.filter(i => parseInt(i.status) === 2 || parseInt(i.status) === 4).length;
-    return { pending, inProgress, resolved, total: itemIssues.length };
+    if (!itemIssues || !Array.isArray(itemIssues)) return { rusak: 0, menunggu: 0, diperbaiki: 0, maintenance: 0, baik: 0, total: 0 };
+    const rusak = itemIssues.filter(i => parseInt(i.status) === 0).length;
+    const menunggu = itemIssues.filter(i => parseInt(i.status) === 1).length;
+    const diperbaiki = itemIssues.filter(i => parseInt(i.status) === 2).length;
+    const maintenance = itemIssues.filter(i => parseInt(i.status) === 3).length;
+    const baik = itemIssues.filter(i => parseInt(i.status) === 4).length;
+    return { rusak, menunggu, diperbaiki, maintenance, baik, total: itemIssues.length };
   };
 
   const columns = [
@@ -165,14 +169,20 @@ const Issue = () => {
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-gray-700">{counts.total} issue</span>
             <div className="flex items-center gap-1">
-              {counts.pending > 0 && (
-                <span className="px-1.5 py-0.5 text-xs bg-yellow-100 text-yellow-700 rounded">{counts.pending}</span>
+              {counts.rusak > 0 && (
+                <span className="px-1.5 py-0.5 text-xs bg-red-100 text-red-700 rounded">{counts.rusak}</span>
               )}
-              {counts.inProgress > 0 && (
-                <span className="px-1.5 py-0.5 text-xs bg-blue-100 text-blue-700 rounded">{counts.inProgress}</span>
+              {counts.menunggu > 0 && (
+                <span className="px-1.5 py-0.5 text-xs bg-yellow-100 text-yellow-700 rounded">{counts.menunggu}</span>
               )}
-              {counts.resolved > 0 && (
-                <span className="px-1.5 py-0.5 text-xs bg-green-100 text-green-700 rounded">{counts.resolved}</span>
+              {counts.diperbaiki > 0 && (
+                <span className="px-1.5 py-0.5 text-xs bg-green-100 text-green-700 rounded">{counts.diperbaiki}</span>
+              )}
+              {counts.maintenance > 0 && (
+                <span className="px-1.5 py-0.5 text-xs bg-blue-100 text-blue-700 rounded">{counts.maintenance}</span>
+              )}
+              {counts.baik > 0 && (
+                <span className="px-1.5 py-0.5 text-xs bg-emerald-100 text-emerald-700 rounded">{counts.baik}</span>
               )}
             </div>
           </div>
@@ -203,11 +213,11 @@ const Issue = () => {
   const getStatusColor = (status) => {
     const statusNum = parseInt(status);
     switch (statusNum) {
-      case 0: return 'bg-yellow-500';
-      case 1: return 'bg-blue-500';
+      case 0: return 'bg-red-500';
+      case 1: return 'bg-yellow-500';
       case 2: return 'bg-green-500';
-      case 3: return 'bg-red-500';
-      case 4: return 'bg-green-500';
+      case 3: return 'bg-blue-500';
+      case 4: return 'bg-emerald-500';
       default: return 'bg-gray-500';
     }
   };
@@ -216,11 +226,11 @@ const Issue = () => {
   const getStatusIcon = (status) => {
     const statusNum = parseInt(status);
     switch (statusNum) {
-      case 0: return <FiClock className="text-yellow-500" size={16} />;
-      case 1: return <FiTool className="text-blue-500" size={16} />;
+      case 0: return <FiXCircle className="text-red-500" size={16} />;
+      case 1: return <FiClock className="text-yellow-500" size={16} />;
       case 2: return <FiCheckCircle className="text-green-500" size={16} />;
-      case 3: return <FiXCircle className="text-red-500" size={16} />;
-      case 4: return <FiCheckCircle className="text-green-500" size={16} />;
+      case 3: return <FiTool className="text-blue-500" size={16} />;
+      case 4: return <FiCheckCircle className="text-emerald-500" size={16} />;
       default: return <FiClock className="text-gray-500" size={16} />;
     }
   };
@@ -233,9 +243,9 @@ const Issue = () => {
   };
 
   const totalIssues = issues.stats?.totalIssues || 0;
-  const pendingIssues = getStatusCount(0);
-  const inProgressIssues = getStatusCount(1);
-  const resolvedIssues = getStatusCount(2) + getStatusCount(4);
+  const rusakIssues = getStatusCount(0);
+  const menungguIssues = getStatusCount(1);
+  const diperbaikiIssues = getStatusCount(2);
 
   // Custom actions - only show view for items with issues
   const customActions = (item) => {
@@ -269,17 +279,17 @@ const Issue = () => {
           <p className="text-sm text-gray-500 mb-1">Total Issue</p>
           <p className="text-2xl font-bold text-gray-800">{totalIssues}</p>
         </div>
-        <div className="bg-yellow-50 rounded-xl p-5 shadow-sm">
-          <p className="text-sm text-yellow-600 mb-1">Pending</p>
-          <p className="text-2xl font-bold text-yellow-700">{pendingIssues}</p>
+        <div className="bg-red-50 rounded-xl p-5 shadow-sm">
+          <p className="text-sm text-red-600 mb-1">Rusak</p>
+          <p className="text-2xl font-bold text-red-700">{rusakIssues}</p>
         </div>
-        <div className="bg-blue-50 rounded-xl p-5 shadow-sm">
-          <p className="text-sm text-blue-600 mb-1">Diproses</p>
-          <p className="text-2xl font-bold text-blue-700">{inProgressIssues}</p>
+        <div className="bg-yellow-50 rounded-xl p-5 shadow-sm">
+          <p className="text-sm text-yellow-600 mb-1">Menunggu</p>
+          <p className="text-2xl font-bold text-yellow-700">{menungguIssues}</p>
         </div>
         <div className="bg-green-50 rounded-xl p-5 shadow-sm">
-          <p className="text-sm text-green-600 mb-1">Selesai</p>
-          <p className="text-2xl font-bold text-green-700">{resolvedIssues}</p>
+          <p className="text-sm text-green-600 mb-1">Diperbaiki</p>
+          <p className="text-2xl font-bold text-green-700">{diperbaikiIssues}</p>
         </div>
       </div>
 

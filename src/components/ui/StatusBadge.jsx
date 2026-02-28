@@ -1,11 +1,11 @@
 const StatusBadge = ({ status, type = 'default', size = 'md' }) => {
   // Map numeric statuses to string statuses (for issue status)
   const numericStatusMap = {
-    0: 'pending',
-    1: 'in_progress',
-    2: 'resolved',
-    3: 'rejected',
-    4: 'resolved',
+    0: 'rusak',
+    1: 'menunggu_diperbaiki',
+    2: 'diperbaiki',
+    3: 'maintenance',
+    4: 'baik',
   };
 
   const statusStyles = {
@@ -24,6 +24,13 @@ const StatusBadge = ({ status, type = 'default', size = 'md' }) => {
     resolved: 'bg-green-100 text-green-700',
     selesai: 'bg-green-100 text-green-700',
     closed: 'bg-gray-100 text-gray-700',
+
+    // Condition/status statuses
+    rusak: 'bg-red-100 text-red-700',
+    menunggu_diperbaiki: 'bg-yellow-100 text-yellow-700',
+    diperbaiki: 'bg-green-100 text-green-700',
+    maintenance: 'bg-blue-100 text-blue-700',
+    baik: 'bg-emerald-100 text-emerald-700',
 
     // Priority
     low: 'bg-gray-100 text-gray-700',
@@ -76,6 +83,13 @@ const StatusBadge = ({ status, type = 'default', size = 'md' }) => {
     paid: 'Lunas',
     unpaid: 'Belum Bayar',
     partial: 'Sebagian',
+
+    // Condition/status labels
+    rusak: 'Rusak',
+    menunggu_diperbaiki: 'Menunggu Diperbaiki',
+    diperbaiki: 'Diperbaiki',
+    maintenance: 'Maintenance',
+    baik: 'Baik',
   };
 
   // Handle numeric status

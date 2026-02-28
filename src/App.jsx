@@ -29,6 +29,9 @@ import RoomDetail from './pages/master/RoomDetail';
 import CategoryItemDetail from './pages/master/CategoryItemDetail';
 import AccountDetail from './pages/AccountDetail';
 
+// Deep Link Redirect (public)
+import DeepLinkRedirect from './pages/DeepLinkRedirect';
+
 // Error Pages
 import NotFound from './pages/NotFound';
 
@@ -98,6 +101,7 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/verify-otp" element={<OTPVerification />} />
+          <Route path="/app/item/:id" element={<DeepLinkRedirect />} />
 
           {/* Dashboard */}
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
