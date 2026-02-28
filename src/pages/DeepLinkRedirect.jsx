@@ -2,60 +2,124 @@ import { useParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 
+const DEEP_LINK_DOMAIN = import.meta.env.VITE_DEEP_LINK_DOMAIN || 'utamaapp.brainsia.com';
+const DEEP_LINK_SCHEME = import.meta.env.VITE_DEEP_LINK_SCHEME || 'utamaapp';
 const API_URL = import.meta.env.VITE_API_URL?.replace('/api/dashboard', '') || 'http://localhost:3000';
 
-const DeepLinkRedirect = () => {
+const TYPE_CONFIG = {
+  item: {
+    apiPath: '/api/public/item',
+    appPath: 'app/item',
+    fallbackText: 'Tekan tombol di bawah untuk membuka item di aplikasi Utama Apps.',
+  },
+  unit: {
+    apiPath: '/api/public/unit',
+    appPath: 'app/unit',
+    fallbackText: 'Tekan tombol di bawah untuk membuka unit di aplikasi Utama Apps.',
+  },
+  event: {
+    apiPath: '/api/public/event',
+    appPath: 'app/event',
+    fallbackText: 'Tekan tombol di bawah untuk membuka event di aplikasi Utama Apps.',
+  },
+};
+
+const DeepLinkRedirect = ({ type = 'item' }) => {
   const { id } = useParams();
   const [showFallback, setShowFallback] = useState(false);
-  const [item, setItem] = useState(null);
-  const deepLink = `utamaapp://item/${id}`;
+  const [data, setData] = useState(null);
+
+  const config = TYPE_CONFIG[type] || TYPE_CONFIG.item;
+  const schemeFallback = `${DEEP_LINK_SCHEME}://${config.appPath}/${id}`;
 
   useEffect(() => {
-    // Fetch item data from API
-    axios.get(`${API_URL}/api/public/item/${id}`)
+    // Fetch data from API
+    axios.get(`${API_URL}${config.apiPath}/${id}`)
       .then(res => {
         if (res.data.success) {
-          setItem(res.data.data);
+          setData(res.data.data);
         }
       })
       .catch(() => {});
 
-    // Try to open the app
-    window.location.href = deepLink;
+    // Try to open the app via custom scheme
+    window.location.href = schemeFallback;
 
     const timer = setTimeout(() => setShowFallback(true), 1500);
     return () => clearTimeout(timer);
-  }, [deepLink, id]);
+  }, [id, config.apiPath, schemeFallback]);
+
+  const getDisplayName = () => {
+    if (!data) return 'Utama Apps';
+    if (type === 'item') return data.item_name || 'Item';
+    if (type === 'unit') return data.campus_name || 'Unit';
+    if (type === 'event') return data.event_title || 'Event';
+    return 'Utama Apps';
+  };
+
+  const getSubtitle = () => {
+    if (!data) return null;
+    if (type === 'item') return data.item_code;
+    if (type === 'unit') return data.alamat;
+    if (type === 'event') {
+      if (!data.date) return data.tempat;
+      const dateStr = new Date(data.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+      return data.tempat ? `${dateStr} • ${data.tempat}` : dateStr;
+    }
+    return null;
+  };
+
+  const getBadge = () => {
+    if (!data) return null;
+    if (type === 'item') {
+      const catName = data.category_item?.category_item_name;
+      const catType = data.category_item?.type;
+      return catName ? `${catName}${catType ? ` • ${catType}` : ''}` : null;
+    }
+    if (type === 'unit') return data.buildingCount != null ? `${data.buildingCount} Gedung` : null;
+    if (type === 'event') return data.category?.event_category_name || 'Event';
+    return null;
+  };
+
+  const getDescription = () => {
+    if (!data) return config.fallbackText;
+    if (type === 'item') return data.item_description || config.fallbackText;
+    if (type === 'event') return data.event_description || config.fallbackText;
+    return config.fallbackText;
+  };
+
+  const getPhoto = () => {
+    return data?.photo_1 || null;
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-purple-50 to-white flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-lg max-w-sm w-full overflow-hidden">
-        {/* Item Image */}
-        {item?.photo_1 && (
+        {/* Photo */}
+        {getPhoto() && (
           <img
-            src={item.photo_1}
-            alt={item.item_name}
+            src={getPhoto()}
+            alt={getDisplayName()}
             className="w-full h-48 object-cover"
           />
         )}
 
         <div className="p-6 text-center">
-          {/* Category Badge */}
-          {item?.category_item?.category_item_name && (
+          {/* Badge */}
+          {getBadge() && (
             <span className="inline-block bg-purple-100 text-purple-700 text-xs font-semibold px-3 py-1 rounded-full mb-3">
-              {item.category_item.category_item_name}
-              {item.category_item.type && ` • ${item.category_item.type}`}
+              {getBadge()}
             </span>
           )}
 
-          {/* Item Name or Default */}
+          {/* Name */}
           <h1 className="text-xl font-bold text-gray-800 mb-1">
-            {item?.item_name || 'Utama Apps'}
+            {getDisplayName()}
           </h1>
 
-          {/* Item Code */}
-          {item?.item_code && (
-            <p className="text-sm text-gray-400 font-mono mb-2">{item.item_code}</p>
+          {/* Subtitle */}
+          {getSubtitle() && (
+            <p className="text-sm text-gray-400 mb-2">{getSubtitle()}</p>
           )}
 
           {!showFallback ? (
@@ -68,10 +132,10 @@ const DeepLinkRedirect = () => {
           ) : (
             <>
               <p className="text-gray-500 mb-5 text-sm">
-                {item?.item_description || 'Tekan tombol di bawah untuk membuka item di aplikasi Utama Apps.'}
+                {getDescription()}
               </p>
               <a
-                href={deepLink}
+                href={schemeFallback}
                 className="block w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-xl transition-colors"
               >
                 Buka di Aplikasi

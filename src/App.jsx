@@ -101,7 +101,9 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/verify-otp" element={<OTPVerification />} />
-          <Route path="/app/item/:id" element={<DeepLinkRedirect />} />
+          <Route path="/app/item/:id" element={<DeepLinkRedirect type="item" />} />
+          <Route path="/app/unit/:id" element={<DeepLinkRedirect type="unit" />} />
+          <Route path="/app/event/:id" element={<DeepLinkRedirect type="event" />} />
 
           {/* Dashboard */}
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
