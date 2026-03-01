@@ -238,6 +238,7 @@ const UnitDetail = () => {
   const [itemPhoto2File, setItemPhoto2File] = useState(null);
   const [itemPhoto2Preview, setItemPhoto2Preview] = useState('');
   const [itemImageLoading, setItemImageLoading] = useState(false);
+  const [previewImage, setPreviewImage] = useState(null);
   const itemPhoto1InputRef = useRef(null);
   const itemPhoto2InputRef = useRef(null);
 
@@ -524,6 +525,20 @@ const UnitDetail = () => {
   ];
 
   const activityColumns = [
+    {
+      key: 'photo_1',
+      label: 'Foto',
+      width: '80px',
+      render: (value) => (
+        <img
+          src={value || logoFallback}
+          alt="Activity"
+          className="w-12 h-12 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity"
+          onError={(e) => { e.target.src = logoFallback; }}
+          onClick={() => value && setPreviewImage(value)}
+        />
+      ),
+    },
     {
       key: 'user',
       label: 'User',
@@ -2502,6 +2517,28 @@ const UnitDetail = () => {
         type="danger"
         loading={usersLoading}
       />
+      {/* Image Preview Modal */}
+      {previewImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
+          onClick={() => setPreviewImage(null)}
+        >
+          <div className="relative max-w-3xl max-h-[90vh] p-2" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setPreviewImage(null)}
+              className="absolute -top-2 -right-2 z-10 w-8 h-8 flex items-center justify-center bg-white rounded-full shadow-lg hover:bg-gray-100"
+            >
+              <FiX className="w-5 h-5 text-gray-700" />
+            </button>
+            <img
+              src={previewImage}
+              alt="Preview"
+              className="max-w-full max-h-[85vh] object-contain rounded-lg"
+              onError={(e) => { e.target.src = logoFallback; }}
+            />
+          </div>
+        </div>
+      )}
     </MainLayout>
   );
 };
