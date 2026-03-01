@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'react-hot-toast';
+import ReactQuill from 'react-quill-new';
+import 'react-quill-new/dist/quill.snow.css';
 import MainLayout from '../../layouts/MainLayout';
 import {
   DataTable,
@@ -33,6 +35,8 @@ import {
   FiBox,
   FiCheckCircle,
   FiAlertCircle,
+  FiChevronDown,
+  FiChevronUp,
 } from 'react-icons/fi';
 import { convertToWebP, validateImageFile } from '../../utils/imageUtils';
 import logoFallback from '../../../logo.png';
@@ -85,6 +89,7 @@ const UnitDetail = () => {
   );
 
   const [activeTab, setActiveTab] = useState('gedung');
+  const [kataPengantarOpen, setKataPengantarOpen] = useState(false);
 
   // Export modal - menggunakan format bulan (month1, year1, month2, year2)
   const [isExportOpen, setIsExportOpen] = useState(false);
@@ -1445,9 +1450,20 @@ const UnitDetail = () => {
 
         {/* Kata Pengantar */}
         {unitData.kata_pengantar && (
-          <div className="mt-4 pt-4 border-t border-gray-100">
-            <span className="text-sm text-gray-500 mb-2 block">Kata Pengantar</span>
-            <div className="text-gray-700 prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: unitData.kata_pengantar }} />
+          <div className="mt-4 pt-4 border-t border-gray-100 overflow-hidden">
+            <button
+              onClick={() => setKataPengantarOpen(!kataPengantarOpen)}
+              className="flex items-center justify-between w-full text-left group"
+            >
+              <span className="text-sm text-gray-500">Kata Pengantar</span>
+              <span className="flex items-center gap-1 text-xs text-primary font-medium group-hover:underline">
+                {kataPengantarOpen ? 'Sembunyikan' : 'Lihat Selengkapnya'}
+                {kataPengantarOpen ? <FiChevronUp className="w-4 h-4" /> : <FiChevronDown className="w-4 h-4" />}
+              </span>
+            </button>
+            {kataPengantarOpen && (
+              <div className="mt-2 text-gray-700 prose prose-sm max-w-none break-words overflow-hidden" dangerouslySetInnerHTML={{ __html: unitData.kata_pengantar }} />
+            )}
           </div>
         )}
       </div>
@@ -2036,15 +2052,27 @@ const UnitDetail = () => {
           placeholder="Contoh: Seminar Nasional"
           required
         />
-        <FormInput
-          label="Deskripsi"
-          name="event_description"
-          type="textarea"
-          value={eventForm.event_description}
-          onChange={(e) => setEventForm({ ...eventForm, event_description: e.target.value })}
-          placeholder="Deskripsi event"
-          required
-        />
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Deskripsi <span className="text-red-500">*</span>
+          </label>
+          <ReactQuill
+            theme="snow"
+            value={eventForm.event_description}
+            onChange={(value) => setEventForm((prev) => ({ ...prev, event_description: value }))}
+            placeholder="Deskripsi event"
+            modules={{
+              toolbar: [
+                [{ header: [1, 2, 3, false] }],
+                ['bold', 'italic', 'underline', 'strike'],
+                [{ list: 'ordered' }, { list: 'bullet' }],
+                [{ align: [] }],
+                ['link'],
+                ['clean'],
+              ],
+            }}
+          />
+        </div>
         <div className="grid grid-cols-3 gap-4">
           <FormInput
             label="Tanggal"

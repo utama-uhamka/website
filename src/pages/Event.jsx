@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'react-hot-toast';
+import ReactQuill from 'react-quill-new';
+import 'react-quill-new/dist/quill.snow.css';
 import MainLayout from '../layouts/MainLayout';
 import {
   DataTable,
@@ -402,15 +404,27 @@ const Event = () => {
           placeholder="Masukkan judul event"
           required
         />
-        <FormInput
-          label="Deskripsi"
-          name="event_description"
-          type="textarea"
-          value={formData.event_description}
-          onChange={handleInputChange}
-          placeholder="Deskripsi event"
-          required
-        />
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Deskripsi <span className="text-red-500">*</span>
+          </label>
+          <ReactQuill
+            theme="snow"
+            value={formData.event_description}
+            onChange={(value) => setFormData((prev) => ({ ...prev, event_description: value }))}
+            placeholder="Deskripsi event"
+            modules={{
+              toolbar: [
+                [{ header: [1, 2, 3, false] }],
+                ['bold', 'italic', 'underline', 'strike'],
+                [{ list: 'ordered' }, { list: 'bullet' }],
+                [{ align: [] }],
+                ['link'],
+                ['clean'],
+              ],
+            }}
+          />
+        </div>
         <div className="grid grid-cols-2 gap-4">
           <FormInput
             label="Kategori"
@@ -522,7 +536,7 @@ const Event = () => {
             </div>
             {selectedItem.event_description && (
               <div className="bg-gray-50 rounded-lg p-4">
-                <p className="text-sm text-gray-600">{selectedItem.event_description}</p>
+                <div className="text-sm text-gray-600 prose prose-sm max-w-none break-words overflow-hidden" dangerouslySetInnerHTML={{ __html: selectedItem.event_description }} />
               </div>
             )}
             <div className="grid grid-cols-2 gap-4">
