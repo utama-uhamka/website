@@ -24,6 +24,7 @@
     "@reduxjs/toolkit": "^2.10.1",
     "@vitejs/plugin-react": "^5.1.0",
     "axios": "^1.13.2",
+    "dompurify": "^3.3.1",
     "leaflet": "^1.9.4",
     "leaflet.heat": "^0.2.0",
     "react": "^19.2.0",

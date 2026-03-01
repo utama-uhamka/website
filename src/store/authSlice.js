@@ -88,8 +88,18 @@ export const changePasswordAsync = createAsyncThunk(
   }
 );
 
+const safeParseUser = () => {
+  try {
+    const raw = localStorage.getItem('user');
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    localStorage.removeItem('user');
+    return null;
+  }
+};
+
 const initialState = {
-  user: JSON.parse(localStorage.getItem('user')) || null,
+  user: safeParseUser(),
   token: localStorage.getItem('token') || null,
   isAuthenticated: !!localStorage.getItem('token'),
   loading: false,
@@ -131,11 +141,17 @@ const authSlice = createSlice({
     },
     checkAuth: (state) => {
       const token = localStorage.getItem('token');
-      const user = localStorage.getItem('user');
-      if (token && user) {
-        state.token = token;
-        state.user = JSON.parse(user);
-        state.isAuthenticated = true;
+      const userStr = localStorage.getItem('user');
+      if (token && userStr) {
+        try {
+          state.token = token;
+          state.user = JSON.parse(userStr);
+          state.isAuthenticated = true;
+        } catch {
+          localStorage.removeItem('user');
+          state.user = null;
+          state.isAuthenticated = false;
+        }
       }
     },
   },

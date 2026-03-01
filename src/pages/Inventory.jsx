@@ -152,11 +152,11 @@ const Inventory = () => {
 
   // Data arrays
   const itemsData = items.data || [];
-  const categoryOptions = (categoryItems.data || []).map(c => ({ value: c.category_id, label: c.name }));
-  const campusOptions = (campuses.data || []).map(c => ({ value: c.campus_id, label: c.name }));
-  const buildingOptions = (buildings.data || []).map(b => ({ value: b.building_id, label: b.name }));
-  const floorOptions = (floors.data || []).map(f => ({ value: f.floor_id, label: f.name }));
-  const roomOptions = (rooms.data || []).map(r => ({ value: r.room_id, label: r.name }));
+  const categoryOptions = (categoryItems.data || []).map(c => ({ value: c.category_item_id, label: c.category_item_name }));
+  const campusOptions = (campuses.data || []).map(c => ({ value: c.campus_id, label: c.campus_name }));
+  const buildingOptions = (buildings.data || []).map(b => ({ value: b.building_id, label: b.building_name }));
+  const floorOptions = (floors.data || []).map(f => ({ value: f.floor_id, label: f.floor_name }));
+  const roomOptions = (rooms.data || []).map(r => ({ value: r.room_id, label: r.room_name }));
 
   // Column definitions
   const columns = [
@@ -211,7 +211,7 @@ const Inventory = () => {
     setFormData({
       name: item.name,
       code: item.code,
-      category_id: item.category_id || '',
+      category_id: item.category_item_id || '',
       quantity: item.quantity,
       unit: item.unit || 'Unit',
       condition: item.condition,

@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'react-hot-toast';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
+import DOMPurify from 'dompurify';
 import MainLayout from '../layouts/MainLayout';
 import {
   DataTable,
@@ -536,7 +537,7 @@ const Event = () => {
             </div>
             {selectedItem.event_description && (
               <div className="bg-gray-50 rounded-lg p-4">
-                <div className="text-sm text-gray-600 prose prose-sm max-w-none break-words overflow-hidden" dangerouslySetInnerHTML={{ __html: selectedItem.event_description }} />
+                <div className="text-sm text-gray-600 prose prose-sm max-w-none break-words overflow-hidden" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedItem.event_description) }} />
               </div>
             )}
             <div className="grid grid-cols-2 gap-4">

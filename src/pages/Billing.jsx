@@ -169,10 +169,10 @@ const Billing = () => {
   // Calculate summary
   const totalUnpaid = billings.data
     .filter((d) => d.status === 0)
-    .reduce((sum, d) => sum + parseFloat(d.total_billing || 0), 0);
+    .reduce((sum, d) => sum + (parseFloat(d.total_billing) || 0), 0);
   const totalPaid = billings.data
     .filter((d) => d.status === 1)
-    .reduce((sum, d) => sum + parseFloat(d.total_billing || 0), 0);
+    .reduce((sum, d) => sum + (parseFloat(d.total_billing) || 0), 0);
 
   return (
     <MainLayout>

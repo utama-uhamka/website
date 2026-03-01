@@ -471,9 +471,11 @@ const Dashboard = () => {
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 rounded-lg">
                   <FiCheckCircle className="w-4 h-4 text-green-600" />
                   <span className="text-sm font-medium text-green-700">
-                    {Math.round(
-                      (stats.issues.resolvedIssues / stats.issues.totalIssues) * 100
-                    )}
+                    {stats.issues.totalIssues > 0
+                      ? Math.round(
+                          (stats.issues.resolvedIssues / stats.issues.totalIssues) * 100
+                        )
+                      : 0}
                     % Resolved
                   </span>
                 </div>

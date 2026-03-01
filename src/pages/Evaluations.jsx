@@ -172,7 +172,7 @@ const Evaluations = () => {
       label: 'Total',
       width: '80px',
       render: (value, item) => {
-        const total = value || ((item.attendance_score + item.performance_score + item.attitude_score + item.teamwork_score) / 4);
+        const total = value || (((item.attendance_score || 0) + (item.performance_score || 0) + (item.attitude_score || 0) + (item.teamwork_score || 0)) / 4);
         return <span className="font-bold text-primary">{total?.toFixed(2) || 0}</span>;
       },
     },
@@ -181,7 +181,7 @@ const Evaluations = () => {
       label: 'Rating',
       width: '80px',
       render: (value, item) => {
-        const total = item.total_score || ((item.attendance_score + item.performance_score + item.attitude_score + item.teamwork_score) / 4);
+        const total = item.total_score || (((item.attendance_score || 0) + (item.performance_score || 0) + (item.attitude_score || 0) + (item.teamwork_score || 0)) / 4);
         const rating = value || calculateRating(total);
         return (
           <span className={`px-3 py-1 text-sm font-bold rounded-full ${getRatingColor(rating)}`}>
@@ -425,7 +425,7 @@ const Evaluations = () => {
       >
         {selectedItem && (() => {
           const totalScore = selectedItem.total_score ||
-            ((selectedItem.attendance_score + selectedItem.performance_score + selectedItem.attitude_score + selectedItem.teamwork_score) / 4);
+            (((selectedItem.attendance_score || 0) + (selectedItem.performance_score || 0) + (selectedItem.attitude_score || 0) + (selectedItem.teamwork_score || 0)) / 4);
           const rating = selectedItem.rating || calculateRating(totalScore);
 
           return (

@@ -26,7 +26,7 @@ const DataTable = ({
     if (column.render) {
       return column.render(item[column.key], item);
     }
-    return item[column.key] || '-';
+    return item[column.key] ?? '-';
   };
 
   const hasAnyAction = actionColumn.edit || actionColumn.delete || actionColumn.view || customActions;

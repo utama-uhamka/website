@@ -247,9 +247,9 @@ const Employees = () => {
         email: formData.email,
         phone_number: formData.phone_number,
         position: formData.position,
-        role_id: parseInt(formData.role_id),
-        campus_id: parseInt(formData.campus_id),
-        is_active: parseInt(formData.is_active),
+        role_id: formData.role_id ? parseInt(formData.role_id) : null,
+        campus_id: formData.campus_id ? parseInt(formData.campus_id) : null,
+        is_active: parseInt(formData.is_active) || 0,
       };
 
       // Only include password if provided (for new user or password change)

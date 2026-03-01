@@ -319,7 +319,7 @@ const Profile = () => {
               <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl p-4 text-center">
                 <p className="text-2xl font-bold text-amber-600">
                   {user?.createdAt
-                    ? Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24))
+                    ? Math.max(0, Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24)))
                     : 0}
                 </p>
                 <p className="text-sm text-gray-500 mt-2">Hari Bergabung</p>
