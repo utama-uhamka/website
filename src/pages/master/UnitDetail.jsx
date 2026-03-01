@@ -68,7 +68,7 @@ import {
   clearDataError,
   clearDataSuccess,
 } from '../../store/dataSlice';
-import { reportsAPI } from '../../services/api';
+import { reportsAPI, itemsAPI } from '../../services/api';
 
 const UnitDetail = () => {
   const { id } = useParams();
@@ -183,10 +183,13 @@ const UnitDetail = () => {
     item_code: '',
     item_description: 'Item PLN/PDAM',
     type: 'PLN', // PLN or PDAM
-    no_subcription: '',
     total: 1,
   });
   const [plnPdamFormLoading, setPlnPdamFormLoading] = useState(false);
+  const [plnPdamItemsData, setPlnPdamItemsData] = useState([]);
+  const [plnPdamItemsLoading, setPlnPdamItemsLoading] = useState(false);
+  const [plnPdamPagination, setPlnPdamPagination] = useState({ total: 0, page: 1, totalPages: 1 });
+  const [plnPdamPage, setPlnPdamPage] = useState(1);
 
   // User CRUD states
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
@@ -281,6 +284,26 @@ const UnitDetail = () => {
     loadItems();
   }, [loadItems]);
 
+  // Load PLN/PDAM items separately (filtered by category type 'Billing')
+  const loadPlnPdamItems = useCallback(async (page = plnPdamPage) => {
+    setPlnPdamItemsLoading(true);
+    try {
+      const response = await itemsAPI.getAll({ campus_id: id, category_type: 'Billing', page, limit: itemsPerPage });
+      if (response.data.success) {
+        setPlnPdamItemsData(response.data.data || []);
+        setPlnPdamPagination(response.data.pagination || { total: 0, page: 1, totalPages: 1 });
+      }
+    } catch {
+      // silent
+    } finally {
+      setPlnPdamItemsLoading(false);
+    }
+  }, [id, plnPdamPage, itemsPerPage]);
+
+  useEffect(() => {
+    loadPlnPdamItems();
+  }, [loadPlnPdamItems]);
+
   // Load category items for dropdown
   const loadCategoryItems = useCallback(() => {
     dispatch(fetchCategoryItems({ limit: 100 }));
@@ -362,8 +385,9 @@ const UnitDetail = () => {
       toast.success(dataSuccess);
       dispatch(clearDataSuccess());
       loadItems();
+      loadPlnPdamItems();
     }
-  }, [dataSuccess, dispatch, loadItems]);
+  }, [dataSuccess, dispatch, loadItems, loadPlnPdamItems]);
 
   // Handle success
   useEffect(() => {
@@ -399,12 +423,11 @@ const UnitDetail = () => {
     { value: 'PDAM', label: 'PDAM (Air)' },
   ];
 
-  // Get PLN/PDAM items for this campus
-  // Get PLN/PDAM items for billing tab
-  const plnPdamItems = (items?.data || []).filter(item => parseInt(item.category_pln_pdam) === 1);
+  // PLN/PDAM items from separate fetch (category type 'Billing')
+  const plnPdamItems = plnPdamItemsData;
 
-  // Regular items (excluding PLN/PDAM items) for Item tab
-  const regularItems = (items?.data || []).filter(item => parseInt(item.category_pln_pdam) !== 1);
+  // Regular items (excluding Billing type) for Item tab
+  const regularItems = (items?.data || []).filter(item => item.category_item?.type !== 'Billing');
 
   // Item stats (excluding PLN/PDAM items)
   const goodConditionItems = regularItems.filter(i => i.item_condition === 'Baik').length;
@@ -475,7 +498,6 @@ const UnitDetail = () => {
   const plnPdamColumns = [
     { key: 'item_code', label: 'Kode', width: '120px' },
     { key: 'item_name', label: 'Nama Item' },
-    { key: 'no_subcription', label: 'No. Langganan', render: (v) => v || '-' },
     {
       key: 'category_item',
       label: 'Tipe',
@@ -1145,7 +1167,6 @@ const UnitDetail = () => {
       item_code: '',
       item_description: 'Item PLN/PDAM',
       type: 'PLN',
-      no_subcription: '',
       total: 1,
     });
     setIsPlnPdamModalOpen(true);
@@ -1161,7 +1182,6 @@ const UnitDetail = () => {
       item_code: item.item_code || '',
       item_description: item.item_description || '',
       type: itemType,
-      no_subcription: item.no_subcription || '',
       total: item.total || 1,
     });
     setIsPlnPdamModalOpen(true);
@@ -1173,8 +1193,8 @@ const UnitDetail = () => {
   };
 
   const handlePlnPdamSubmit = async () => {
-    if (!plnPdamForm.item_name || !plnPdamForm.type || !plnPdamForm.no_subcription) {
-      toast.error('Nama, Tipe, dan No. Langganan wajib diisi');
+    if (!plnPdamForm.item_name || !plnPdamForm.type) {
+      toast.error('Nama dan Tipe wajib diisi');
       return;
     }
 
@@ -1199,7 +1219,6 @@ const UnitDetail = () => {
         item_description: plnPdamForm.item_name, // Same as item_name
         campus_id: id,
         category_item_id: selectedCategory.category_item_id, // Use PLN or PDAM category
-        no_subcription: plnPdamForm.no_subcription,
         total: parseInt(plnPdamForm.total) || 1,
         category_pln_pdam: 1, // Mark as PLN/PDAM item
         item_condition: 'Baik',
@@ -1211,7 +1230,7 @@ const UnitDetail = () => {
         await dispatch(createItem(itemData)).unwrap();
       }
       setIsPlnPdamModalOpen(false);
-      loadItems(); // Refresh items list
+      loadPlnPdamItems(); // Refresh PLN/PDAM items list
     } catch (err) {
       // Error handled by effect
     } finally {
@@ -1223,7 +1242,7 @@ const UnitDetail = () => {
     try {
       await dispatch(deleteItem(selectedPlnPdam.item_id)).unwrap();
       setIsPlnPdamDeleteOpen(false);
-      loadItems(); // Refresh items list
+      loadPlnPdamItems(); // Refresh PLN/PDAM items list
     } catch (err) {
       // Error handled by effect
     }
@@ -1497,7 +1516,7 @@ const UnitDetail = () => {
                 Tambah Item PLN/PDAM
               </button>
             </div>
-            {dataLoading ? (
+            {plnPdamItemsLoading ? (
               <div className="flex items-center justify-center py-10">
                 <FiLoader className="w-6 h-6 animate-spin text-primary" />
               </div>
@@ -1509,6 +1528,11 @@ const UnitDetail = () => {
                 onDelete={handleDeletePlnPdam}
                 showActions={true}
                 actionColumn={{ view: false, edit: true, delete: true }}
+                currentPage={plnPdamPagination.page || 1}
+                totalPages={plnPdamPagination.totalPages || 1}
+                totalItems={plnPdamPagination.total || 0}
+                itemsPerPage={itemsPerPage}
+                onPageChange={(newPage) => { setPlnPdamPage(newPage); loadPlnPdamItems(newPage); }}
               />
             )}
           </Tabs.Tab>
@@ -2371,14 +2395,6 @@ const UnitDetail = () => {
           onChange={(e) => setPlnPdamForm({ ...plnPdamForm, type: e.target.value })}
           options={plnPdamTypeOptions}
           noDefaultOption
-          required
-        />
-        <FormInput
-          label="No. Langganan"
-          name="no_subcription"
-          value={plnPdamForm.no_subcription}
-          onChange={(e) => setPlnPdamForm({ ...plnPdamForm, no_subcription: e.target.value })}
-          placeholder="No. Pelanggan PLN/PDAM"
           required
         />
       </Modal>
